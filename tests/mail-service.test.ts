@@ -6,7 +6,8 @@ import {
     TOKEN_PROGRAM_ID, 
     createMint, 
     createAssociatedTokenAccount, 
-    mintTo 
+    mintTo,
+    getAccount 
 } from '@solana/spl-token';
 import { MailService } from '../target/types/mail_service';
 import { MailServiceClient } from '../app/mail-service-client';
@@ -205,6 +206,122 @@ describe('MailService', () => {
             const fees = await client.getFeesFormatted();
             expect(fees.registrationFee).to.include('USDC');
             expect(fees.delegationFee).to.include('USDC');
+        });
+
+        it('Should fail to set fees as non-owner', async () => {
+            const userClient = new MailServiceClient(
+                provider.connection,
+                new anchor.Wallet(user1),
+                program.programId,
+                usdcMint
+            );
+
+            try {
+                await userClient.setRegistrationFee(200_000_000);
+                expect.fail('Should have failed');
+            } catch (error) {
+                expect(error.message).to.include('OnlyOwner');
+            }
+        });
+
+        it('Should withdraw fees', async () => {
+            const withdrawAmount = 50_000_000; // 50 USDC
+            const txSig = await client.withdrawFees(withdrawAmount);
+            console.log('Withdraw fees transaction:', txSig);
+        });
+    });
+
+    describe('Error Handling', () => {
+        it('Should fail to register empty domain', async () => {
+            const userClient = new MailServiceClient(
+                provider.connection,
+                new anchor.Wallet(user1),
+                program.programId,
+                usdcMint
+            );
+
+            try {
+                await userClient.registerDomain('', false);
+                expect.fail('Should have failed');
+            } catch (error) {
+                expect(error.message).to.include('EmptyDomain');
+            }
+        });
+
+        it('Should fail to reject non-existent delegation', async () => {
+            const user2Client = new MailServiceClient(
+                provider.connection,
+                new anchor.Wallet(user2),
+                program.programId,
+                usdcMint
+            );
+
+            try {
+                // Try to reject delegation that doesn't exist or isn't targeted to user2
+                await user2Client.rejectDelegation(Keypair.generate().publicKey);
+                expect.fail('Should have failed');
+            } catch (error) {
+                // Should fail due to account not found or wrong delegate
+                expect(error.message).to.be.ok;
+            }
+        });
+    });
+
+    describe('Integration Tests', () => {
+        it('Should handle full delegation workflow', async () => {
+            const userClient = new MailServiceClient(
+                provider.connection,
+                new anchor.Wallet(user1),
+                program.programId,
+                usdcMint
+            );
+
+            const user2Client = new MailServiceClient(
+                provider.connection,
+                new anchor.Wallet(user2),
+                program.programId,
+                usdcMint
+            );
+
+            // 1. Set delegation
+            await userClient.delegateTo(user2.publicKey);
+            let delegation = await userClient.getDelegation(user1.publicKey);
+            expect(delegation!.delegate!.toString()).to.equal(user2.publicKey.toString());
+
+            // 2. Reject delegation
+            await user2Client.rejectDelegation(user1.publicKey);
+            delegation = await userClient.getDelegation(user1.publicKey);
+            expect(delegation!.delegate).to.be.null;
+        });
+
+        it('Should handle multiple domain registrations', async () => {
+            const userClient = new MailServiceClient(
+                provider.connection,
+                new anchor.Wallet(user1),
+                program.programId,
+                usdcMint
+            );
+
+            const domains = ['test1.mailbox', 'test2.mailbox', 'test3.mailbox'];
+            
+            for (const domain of domains) {
+                const txSig = await userClient.registerDomain(domain, false);
+                console.log(`Registered ${domain}:`, txSig);
+            }
+        });
+
+        it('Should verify program address derivation', () => {
+            const expectedAddress = client.getServiceAddress();
+            const [derivedAddress] = PublicKey.findProgramAddressSync(
+                [Buffer.from('mail_service')],
+                program.programId
+            );
+            expect(expectedAddress.toString()).to.equal(derivedAddress.toString());
+        });
+
+        it('Should verify USDC mint and program ID getters', () => {
+            expect(client.getUsdcMint().toString()).to.equal(usdcMint.toString());
+            expect(client.getProgramId().toString()).to.equal(program.programId.toString());
         });
     });
 });

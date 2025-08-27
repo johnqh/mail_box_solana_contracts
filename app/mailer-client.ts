@@ -27,8 +27,7 @@ export class MailerClient {
     ) {
         this.provider = new AnchorProvider(connection, wallet, {});
         this.program = new Program<Mailer>(
-            require('../target/idl/mailer.json'),
-            programId,
+            require('../target/idl/mailer.json') as anchor.Idl,
             this.provider
         );
         this.usdcMint = usdcMint;

@@ -29,8 +29,7 @@ export class MailServiceClient {
     ) {
         this.provider = new AnchorProvider(connection, wallet, {});
         this.program = new Program<MailService>(
-            require('../target/idl/mail_service.json'),
-            programId,
+            require('../target/idl/mail_service.json') as anchor.Idl,
             this.provider
         );
         this.usdcMint = usdcMint;
