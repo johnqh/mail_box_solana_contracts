@@ -1,0 +1,153 @@
+{
+  "lastUpdated": "2024-01-01T00:00:00.000Z",
+  "versions": {
+    "v1.0.0": {
+      "releaseDate": "2024-01-01",
+      "deployer": "MailBox Team",
+      "owner": "MailBox Team",
+      "description": "Initial release with core messaging and domain functionality",
+      "features": [
+        "Two-tier messaging system (Priority & Standard)",
+        "Revenue sharing with 90/10 split",
+        "Domain registration and management",
+        "Delegation system with rejection capability",
+        "Cross-network deterministic addressing",
+        "Factory-coordinated deployment"
+      ],
+      "networks": {
+        "mainnet-beta": {
+          "chainId": "Solana Mainnet",
+          "deploymentDate": "2024-01-01",
+          "status": "deployed",
+          "contracts": {
+            "MailBoxFactory": "TBD",
+            "USDC": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "Mailer": "TBD",
+            "MailService": "TBD"
+          },
+          "transactions": {},
+          "contractSettings": {
+            "sendFee": "0.1 USDC",
+            "registrationFee": "100.0 USDC",
+            "delegationFee": "10.0 USDC"
+          },
+          "usdc": {
+            "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "type": "USDC",
+            "isTestnet": false
+          }
+        },
+        "devnet": {
+          "chainId": "Solana Devnet",
+          "deploymentDate": "2024-01-01",
+          "status": "deployed",
+          "contracts": {
+            "MailBoxFactory": "TBD",
+            "MockUSDC": "TBD",
+            "Mailer": "TBD", 
+            "MailService": "TBD"
+          },
+          "transactions": {},
+          "contractSettings": {
+            "sendFee": "0.1 USDC",
+            "registrationFee": "100.0 USDC",
+            "delegationFee": "10.0 USDC"
+          },
+          "usdc": {
+            "address": "TBD",
+            "type": "MockUSDC",
+            "isTestnet": true
+          }
+        },
+        "testnet": {
+          "chainId": "Solana Testnet",
+          "deploymentDate": "2024-01-01",
+          "status": "deployed",
+          "contracts": {
+            "MailBoxFactory": "TBD",
+            "MockUSDC": "TBD",
+            "Mailer": "TBD",
+            "MailService": "TBD"
+          },
+          "transactions": {},
+          "contractSettings": {
+            "sendFee": "0.1 USDC",
+            "registrationFee": "100.0 USDC",
+            "delegationFee": "10.0 USDC"
+          },
+          "usdc": {
+            "address": "TBD",
+            "type": "MockUSDC",
+            "isTestnet": true
+          }
+        },
+        "localnet": {
+          "chainId": "Local Solana",
+          "deploymentDate": "2024-01-01",
+          "status": "deployed",
+          "contracts": {
+            "MailBoxFactory": "TBD",
+            "MockUSDC": "TBD",
+            "Mailer": "TBD",
+            "MailService": "TBD"
+          },
+          "transactions": {},
+          "contractSettings": {
+            "sendFee": "0.1 USDC",
+            "registrationFee": "100.0 USDC",
+            "delegationFee": "10.0 USDC"
+          },
+          "usdc": {
+            "address": "TBD",
+            "type": "MockUSDC",
+            "isTestnet": true
+          }
+        }
+      },
+      "crossNetworkConsistent": true,
+      "consistentAddresses": {
+        "note": "All addresses are deterministic PDAs, identical across networks",
+        "factory": "TBD",
+        "mailer": "TBD", 
+        "mailService": "TBD"
+      }
+    }
+  },
+  "releaseNotes": {
+    "v1.0.0": {
+      "breaking": [],
+      "features": [
+        "Initial implementation of MailBox Solana protocol",
+        "Two-tier messaging system with priority and standard tiers",
+        "Revenue sharing mechanism with 90% recipient share, 10% owner share",
+        "60-day claim period for revenue shares",
+        "Domain registration system with 1-year terms",
+        "Delegation system with rejection capability",
+        "Cross-network deterministic addressing using PDAs",
+        "Factory program for deployment coordination",
+        "Comprehensive deployment scripts and verification tools",
+        "Full feature parity with EVM version"
+      ],
+      "improvements": [],
+      "fixes": [],
+      "security": [
+        "Reentrancy protection on all financial operations",
+        "Owner-only access controls for administrative functions",
+        "Fail-safe fee payment validation",
+        "Atomic transaction processing"
+      ]
+    }
+  },
+  "compatibility": {
+    "solana": ">=1.16.0",
+    "anchor": ">=0.30.1",
+    "node": ">=16.0.0"
+  },
+  "migration": {
+    "v1.0.0": {
+      "from": null,
+      "instructions": "Initial deployment - no migration required",
+      "breaking": false
+    }
+  }
+}

@@ -1,0 +1,245 @@
+{
+  "networks": {
+    "mainnet-beta": {
+      "name": "Solana Mainnet",
+      "cluster": "mainnet-beta",
+      "rpcUrl": "https://api.mainnet-beta.solana.com",
+      "wsUrl": "wss://api.mainnet-beta.solana.com",
+      "explorer": "https://explorer.solana.com",
+      "isMainnet": true,
+      "chainId": "solana-mainnet",
+      "tokens": {
+        "usdc": {
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "symbol": "USDC",
+          "name": "USD Coin"
+        }
+      },
+      "deployment": {
+        "enabled": true,
+        "requiresConfirmation": true,
+        "gasMultiplier": 1.0,
+        "priorityFee": 1000
+      },
+      "limits": {
+        "maxComputeUnits": 200000,
+        "maxTransactionSize": 1232,
+        "maxAccountDataSize": 10485760
+      },
+      "monitoring": {
+        "healthCheck": true,
+        "alerting": true,
+        "metrics": true
+      }
+    },
+    "devnet": {
+      "name": "Solana Devnet",
+      "cluster": "devnet", 
+      "rpcUrl": "https://api.devnet.solana.com",
+      "wsUrl": "wss://api.devnet.solana.com",
+      "explorer": "https://explorer.solana.com?cluster=devnet",
+      "isMainnet": false,
+      "chainId": "solana-devnet",
+      "tokens": {
+        "usdc": {
+          "mint": null,
+          "decimals": 6,
+          "symbol": "MockUSDC",
+          "name": "Mock USD Coin",
+          "createOnDeploy": true
+        }
+      },
+      "deployment": {
+        "enabled": true,
+        "requiresConfirmation": false,
+        "gasMultiplier": 1.0,
+        "priorityFee": 0
+      },
+      "limits": {
+        "maxComputeUnits": 200000,
+        "maxTransactionSize": 1232,
+        "maxAccountDataSize": 10485760
+      },
+      "faucet": {
+        "enabled": true,
+        "solUrl": "https://faucet.solana.com",
+        "maxAirdrop": 2.0
+      },
+      "monitoring": {
+        "healthCheck": true,
+        "alerting": false,
+        "metrics": true
+      }
+    },
+    "testnet": {
+      "name": "Solana Testnet",
+      "cluster": "testnet",
+      "rpcUrl": "https://api.testnet.solana.com", 
+      "wsUrl": "wss://api.testnet.solana.com",
+      "explorer": "https://explorer.solana.com?cluster=testnet",
+      "isMainnet": false,
+      "chainId": "solana-testnet",
+      "tokens": {
+        "usdc": {
+          "mint": null,
+          "decimals": 6,
+          "symbol": "MockUSDC",
+          "name": "Mock USD Coin",
+          "createOnDeploy": true
+        }
+      },
+      "deployment": {
+        "enabled": true,
+        "requiresConfirmation": false,
+        "gasMultiplier": 1.0,
+        "priorityFee": 0
+      },
+      "limits": {
+        "maxComputeUnits": 200000,
+        "maxTransactionSize": 1232,
+        "maxAccountDataSize": 10485760
+      },
+      "faucet": {
+        "enabled": true,
+        "solUrl": "https://faucet.solana.com",
+        "maxAirdrop": 2.0
+      },
+      "monitoring": {
+        "healthCheck": true,
+        "alerting": false,
+        "metrics": false
+      }
+    },
+    "localnet": {
+      "name": "Local Solana",
+      "cluster": "localnet",
+      "rpcUrl": "http://127.0.0.1:8899",
+      "wsUrl": "ws://127.0.0.1:8900",
+      "explorer": null,
+      "isMainnet": false,
+      "chainId": "solana-localnet",
+      "tokens": {
+        "usdc": {
+          "mint": null,
+          "decimals": 6,
+          "symbol": "MockUSDC", 
+          "name": "Mock USD Coin",
+          "createOnDeploy": true,
+          "initialSupply": 1000000000000
+        }
+      },
+      "deployment": {
+        "enabled": true,
+        "requiresConfirmation": false,
+        "gasMultiplier": 1.0,
+        "priorityFee": 0,
+        "autoFund": true
+      },
+      "limits": {
+        "maxComputeUnits": 200000,
+        "maxTransactionSize": 1232,
+        "maxAccountDataSize": 10485760
+      },
+      "validator": {
+        "autoStart": true,
+        "reset": true,
+        "ledgerPath": "/tmp/test-ledger",
+        "accounts": [
+          {
+            "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "program": "spl-token"
+          }
+        ]
+      },
+      "monitoring": {
+        "healthCheck": false,
+        "alerting": false,
+        "metrics": false
+      }
+    }
+  },
+  "programs": {
+    "mail_box_factory": {
+      "name": "MailBox Factory",
+      "programId": "FactoryABC123def456GHI789jkl012MNO345pqr678STU",
+      "version": "1.0.0",
+      "pdas": {
+        "factory": {
+          "seeds": ["factory"],
+          "description": "Main factory state account"
+        },
+        "deployment": {
+          "seeds": ["deployment", "u64:count"],
+          "description": "Individual deployment tracking"
+        }
+      }
+    },
+    "mailer": {
+      "name": "Mailer",
+      "programId": "9FLkBDGpZBcR8LMsQ7MwwV6X9P4TDFgN3DeRh5qYyHJF",
+      "version": "1.0.0",
+      "pdas": {
+        "mailer": {
+          "seeds": ["mailer"],
+          "description": "Main mailer state account"
+        },
+        "recipient_claim": {
+          "seeds": ["claim", "pubkey:recipient"],
+          "description": "Individual recipient claim tracking"
+        }
+      },
+      "fees": {
+        "send_fee": {
+          "amount": 100000,
+          "currency": "USDC",
+          "description": "Fee for sending priority messages"
+        }
+      },
+      "constants": {
+        "CLAIM_PERIOD": 5184000,
+        "RECIPIENT_SHARE": 90,
+        "OWNER_SHARE": 10
+      }
+    },
+    "mail_service": {
+      "name": "Mail Service",
+      "programId": "8EKjCLZjz6LKRxZcQ6LwwF5V8P3TCEgM2CdQg4pZxXHE",
+      "version": "1.0.0",
+      "pdas": {
+        "mail_service": {
+          "seeds": ["mail_service"],
+          "description": "Main service state account"
+        },
+        "delegation": {
+          "seeds": ["delegation", "pubkey:delegator"],
+          "description": "Individual delegation tracking"
+        }
+      },
+      "fees": {
+        "registration_fee": {
+          "amount": 100000000,
+          "currency": "USDC", 
+          "description": "Fee for domain registration"
+        },
+        "delegation_fee": {
+          "amount": 10000000,
+          "currency": "USDC",
+          "description": "Fee for setting delegation"
+        }
+      }
+    }
+  },
+  "deployment": {
+    "strategy": "deterministic",
+    "coordination": "factory",
+    "verification": "automatic",
+    "rollback": "manual"
+  },
+  "security": {
+    "multiSignature": false,
+    "timelock": false,
+    "upgradeAuthority": "deployer",
+    "freezeAuthority": null
+  }
+}
