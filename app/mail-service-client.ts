@@ -28,10 +28,10 @@ export class MailServiceClient {
         usdcMint: PublicKey
     ) {
         this.provider = new AnchorProvider(connection, wallet, {});
-        this.program = new Program<MailService>(
-            require('../target/idl/mail_service.json') as anchor.Idl,
+        this.program = new Program(
+            require('../target/idl/mail_service.json') as any,
             this.provider
-        );
+        ) as Program<MailService>;
         this.usdcMint = usdcMint;
         
         // Derive PDA
@@ -55,7 +55,7 @@ export class MailServiceClient {
     }
 
     private async initializeProgram(owner: PublicKey): Promise<void> {
-        await this.program.methods
+        await ((this.program.methods as any) as any)
             .initialize(this.usdcMint)
             .accounts({
                 mailService: this.mailServicePda,
@@ -83,7 +83,7 @@ export class MailServiceClient {
             true
         );
 
-        return await this.program.methods
+        return await ((this.program.methods as any) as any)
             .delegateTo(delegate || null)
             .accounts({
                 delegation: delegationPda,
@@ -104,7 +104,7 @@ export class MailServiceClient {
             this.program.programId
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .rejectDelegation()
             .accounts({
                 delegation: delegationPda,
@@ -127,7 +127,7 @@ export class MailServiceClient {
             true
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .registerDomain(domain, isExtension)
             .accounts({
                 mailService: this.mailServicePda,
@@ -140,7 +140,7 @@ export class MailServiceClient {
     }
 
     async setRegistrationFee(newFee: number): Promise<string> {
-        return await this.program.methods
+        return await (this.program.methods as any)
             .setRegistrationFee(new BN(newFee))
             .accounts({
                 mailService: this.mailServicePda,
@@ -150,7 +150,7 @@ export class MailServiceClient {
     }
 
     async setDelegationFee(newFee: number): Promise<string> {
-        return await this.program.methods
+        return await (this.program.methods as any)
             .setDelegationFee(new BN(newFee))
             .accounts({
                 mailService: this.mailServicePda,
@@ -171,7 +171,7 @@ export class MailServiceClient {
             owner
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .withdrawFees(new BN(amount))
             .accounts({
                 mailService: this.mailServicePda,
@@ -190,7 +190,7 @@ export class MailServiceClient {
                 this.program.programId
             );
 
-            const account = await this.program.account.delegation.fetch(delegationPda);
+            const account = await (this.program.account as any).delegation.fetch(delegationPda);
             return {
                 delegator: account.delegator,
                 delegate: account.delegate,
@@ -201,7 +201,7 @@ export class MailServiceClient {
     }
 
     async getFees(): Promise<MailServiceFees> {
-        const account = await this.program.account.mailServiceState.fetch(this.mailServicePda);
+        const account = await (this.program.account as any).mailServiceState.fetch(this.mailServicePda);
         return {
             registrationFee: account.registrationFee.toNumber(),
             delegationFee: account.delegationFee.toNumber(),

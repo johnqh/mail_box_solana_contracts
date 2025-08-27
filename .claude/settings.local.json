@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm run build:*)",
+      "Bash(anchor build)",
+      "Bash(npx mocha:*)",
+      "Bash(node:*)",
+      "Bash(npx tsc:*)",
+      "Bash(solana config:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(sed:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

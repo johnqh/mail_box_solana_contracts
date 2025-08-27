@@ -26,10 +26,10 @@ export class MailerClient {
         usdcMint: PublicKey
     ) {
         this.provider = new AnchorProvider(connection, wallet, {});
-        this.program = new Program<Mailer>(
-            require('../target/idl/mailer.json') as anchor.Idl,
+        this.program = new Program(
+            require('../target/idl/mailer.json') as any,
             this.provider
-        );
+        ) as Program<Mailer>;
         this.usdcMint = usdcMint;
         
         // Derive PDA
@@ -53,7 +53,7 @@ export class MailerClient {
     }
 
     private async initializeProgram(owner: PublicKey): Promise<void> {
-        await this.program.methods
+        await (this.program.methods as any)
             .initialize(this.usdcMint)
             .accounts({
                 mailer: this.mailerPda,
@@ -81,7 +81,7 @@ export class MailerClient {
             true
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .sendPriority(subject, body)
             .accounts({
                 recipientClaim: recipientClaimPda,
@@ -114,7 +114,7 @@ export class MailerClient {
             true
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .sendPriorityPrepared(mailId)
             .accounts({
                 recipientClaim: recipientClaimPda,
@@ -147,7 +147,7 @@ export class MailerClient {
             true
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .send(subject, body)
             .accounts({
                 recipientClaim: recipientClaimPda,
@@ -180,7 +180,7 @@ export class MailerClient {
             true
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .sendPrepared(mailId)
             .accounts({
                 recipientClaim: recipientClaimPda,
@@ -213,7 +213,7 @@ export class MailerClient {
             true
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .claimRecipientShare()
             .accounts({
                 recipientClaim: recipientClaimPda,
@@ -239,7 +239,7 @@ export class MailerClient {
             true
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .claimOwnerShare()
             .accounts({
                 mailer: this.mailerPda,
@@ -257,7 +257,7 @@ export class MailerClient {
             this.program.programId
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .claimExpiredShares()
             .accounts({
                 recipientClaim: recipientClaimPda,
@@ -268,7 +268,7 @@ export class MailerClient {
     }
 
     async setFee(newFee: number): Promise<string> {
-        return await this.program.methods
+        return await (this.program.methods as any)
             .setFee(new BN(newFee))
             .accounts({
                 mailer: this.mailerPda,
@@ -284,7 +284,7 @@ export class MailerClient {
                 this.program.programId
             );
 
-            const account = await this.program.account.recipientClaim.fetch(recipientClaimPda);
+            const account = await (this.program.account as any).recipientClaim.fetch(recipientClaimPda);
             const amount = account.amount.toNumber();
             const timestamp = account.timestamp.toNumber();
             const claimPeriodSeconds = CLAIM_PERIOD_DAYS * 24 * 60 * 60;
@@ -302,12 +302,12 @@ export class MailerClient {
     }
 
     async getOwnerClaimable(): Promise<number> {
-        const account = await this.program.account.mailerState.fetch(this.mailerPda);
+        const account = await (this.program.account as any).mailerState.fetch(this.mailerPda);
         return account.ownerClaimable.toNumber();
     }
 
     async getFees(): Promise<MailerFees> {
-        const account = await this.program.account.mailerState.fetch(this.mailerPda);
+        const account = await (this.program.account as any).mailerState.fetch(this.mailerPda);
         return {
             sendFee: account.sendFee.toNumber(),
         };

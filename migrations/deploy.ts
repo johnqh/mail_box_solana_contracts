@@ -93,7 +93,7 @@ export class MailBoxDeployer {
             console.log('📦 Deploying mock USDC token...');
             usdcMint = await this.deployMockUSDC();
         } else {
-            usdcMint = USDC_MINTS[cluster as keyof typeof USDC_MINTS];
+            usdcMint = USDC_MINTS[cluster as keyof typeof USDC_MINTS]!;
             if (!usdcMint) {
                 throw new Error(`No USDC mint configured for cluster: ${cluster}`);
             }
@@ -113,7 +113,7 @@ export class MailBoxDeployer {
             mailServiceProgram.programId
         );
         
-        await mailServiceProgram.methods
+        await (mailServiceProgram.methods as any)
             .initialize(usdcMint)
             .accounts({
                 mailService: mailServicePda,
@@ -136,7 +136,7 @@ export class MailBoxDeployer {
             mailerProgram.programId
         );
         
-        await mailerProgram.methods
+        await (mailerProgram.methods as any)
             .initialize(usdcMint)
             .accounts({
                 mailer: mailerPda,

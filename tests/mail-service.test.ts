@@ -41,7 +41,7 @@ describe('MailService', () => {
         // Create USDC mint
         usdcMint = await createMint(
             provider.connection,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             provider.wallet.publicKey,
             null,
             6 // USDC decimals
@@ -80,19 +80,19 @@ describe('MailService', () => {
         // Mint tokens to users
         await mintTo(
             provider.connection,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             usdcMint,
             user1TokenAccount,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             1000 * 1_000_000 // 1000 USDC
         );
 
         await mintTo(
             provider.connection,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             usdcMint,
             user2TokenAccount,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             1000 * 1_000_000 // 1000 USDC
         );
     }
@@ -219,7 +219,7 @@ describe('MailService', () => {
             try {
                 await userClient.setRegistrationFee(200_000_000);
                 expect.fail('Should have failed');
-            } catch (error) {
+            } catch (error: any) {
                 expect(error.message).to.include('OnlyOwner');
             }
         });
@@ -243,7 +243,7 @@ describe('MailService', () => {
             try {
                 await userClient.registerDomain('', false);
                 expect.fail('Should have failed');
-            } catch (error) {
+            } catch (error: any) {
                 expect(error.message).to.include('EmptyDomain');
             }
         });
@@ -260,7 +260,7 @@ describe('MailService', () => {
                 // Try to reject delegation that doesn't exist or isn't targeted to user2
                 await user2Client.rejectDelegation(Keypair.generate().publicKey);
                 expect.fail('Should have failed');
-            } catch (error) {
+            } catch (error: any) {
                 // Should fail due to account not found or wrong delegate
                 expect(error.message).to.be.ok;
             }

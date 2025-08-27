@@ -42,7 +42,7 @@ describe('Mailer', () => {
         // Create USDC mint
         usdcMint = await createMint(
             provider.connection,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             provider.wallet.publicKey,
             null,
             6 // USDC decimals
@@ -81,26 +81,26 @@ describe('Mailer', () => {
         // Mint tokens to users
         await mintTo(
             provider.connection,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             usdcMint,
             user1TokenAccount,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             1000 * 1_000_000 // 1000 USDC
         );
 
         await mintTo(
             provider.connection,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             usdcMint,
             user2TokenAccount,
-            provider.wallet.payer,
+            (provider.wallet as any).payer || provider.wallet,
             1000 * 1_000_000 // 1000 USDC
         );
     }
 
     describe('Initialization', () => {
         it('Should initialize mailer program', async () => {
-            const mailerState = await program.account.mailerState.fetch(client.getMailerAddress());
+            const mailerState = await (program.account as any).mailerState.fetch(client.getMailerAddress());
             expect(mailerState.owner.toString()).to.equal(owner.publicKey.toString());
             expect(mailerState.usdcMint.toString()).to.equal(usdcMint.toString());
             expect(mailerState.sendFee.toNumber()).to.equal(SEND_FEE);

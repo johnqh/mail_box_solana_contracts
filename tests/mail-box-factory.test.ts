@@ -35,7 +35,7 @@ describe('MailBoxFactory', () => {
         it('Should initialize factory', async () => {
             const version = 'v1.0.0';
             
-            const tx = await program.methods
+            const tx = await (program.methods as any)
                 .initialize(version)
                 .accounts({
                     factory: factoryPda,
@@ -48,7 +48,7 @@ describe('MailBoxFactory', () => {
             console.log('Factory initialization transaction:', tx);
 
             // Verify factory state
-            const factoryAccount = await program.account.factoryState.fetch(factoryPda);
+            const factoryAccount = await (program.account as any).factoryState.fetch(factoryPda);
             expect(factoryAccount.owner.toString()).to.equal(owner.publicKey.toString());
             expect(factoryAccount.version).to.equal(version);
             expect(factoryAccount.deploymentCount.toNumber()).to.equal(0);
@@ -57,7 +57,7 @@ describe('MailBoxFactory', () => {
 
         it('Should fail to initialize factory twice', async () => {
             try {
-                await program.methods
+                await (program.methods as any)
                     .initialize('v1.0.1')
                     .accounts({
                         factory: factoryPda,
@@ -88,7 +88,7 @@ describe('MailBoxFactory', () => {
                 program.programId
             );
 
-            const tx = await program.methods
+            const tx = await (program.methods as any)
                 .registerDeployment(deploymentType, programId, network)
                 .accounts({
                     deployment: deploymentPda,
@@ -102,7 +102,7 @@ describe('MailBoxFactory', () => {
             console.log('Deployment registration transaction:', tx);
 
             // Verify deployment info
-            const deploymentAccount = await program.account.deploymentInfo.fetch(deploymentPda);
+            const deploymentAccount = await (program.account as any).deploymentInfo.fetch(deploymentPda);
             expect(deploymentAccount.deploymentType).to.equal(deploymentType);
             expect(deploymentAccount.programId.toString()).to.equal(programId.toString());
             expect(deploymentAccount.network).to.equal(network);
@@ -110,7 +110,7 @@ describe('MailBoxFactory', () => {
             expect(deploymentAccount.timestamp.toNumber()).to.be.greaterThan(0);
 
             // Verify factory deployment count increased
-            const factoryAccount = await program.account.factoryState.fetch(factoryPda);
+            const factoryAccount = await (program.account as any).factoryState.fetch(factoryPda);
             expect(factoryAccount.deploymentCount.toNumber()).to.equal(1);
         });
 
@@ -127,7 +127,7 @@ describe('MailBoxFactory', () => {
                 program.programId
             );
 
-            const tx = await program.methods
+            const tx = await (program.methods as any)
                 .registerDeployment(deploymentType, programId, network)
                 .accounts({
                     deployment: deploymentPda,
@@ -141,7 +141,7 @@ describe('MailBoxFactory', () => {
             console.log('MailService deployment registration transaction:', tx);
 
             // Verify deployment count increased
-            const factoryAccount = await program.account.factoryState.fetch(factoryPda);
+            const factoryAccount = await (program.account as any).factoryState.fetch(factoryPda);
             expect(factoryAccount.deploymentCount.toNumber()).to.equal(2);
         });
 
@@ -159,7 +159,7 @@ describe('MailBoxFactory', () => {
             );
 
             try {
-                await program.methods
+                await (program.methods as any)
                     .registerDeployment(deploymentType, programId, network)
                     .accounts({
                         deployment: deploymentPda,
@@ -183,7 +183,7 @@ describe('MailBoxFactory', () => {
             const mailerProgramId = Keypair.generate().publicKey;
             const mailServiceProgramId = Keypair.generate().publicKey;
 
-            const result = await program.methods
+            const result = await (program.methods as any)
                 .predictAddresses(projectName, version)
                 .accounts({
                     mailerProgram: mailerProgramId,
@@ -223,7 +223,7 @@ describe('MailBoxFactory', () => {
             const mailerProgram = Keypair.generate().publicKey;
             const mailServiceProgram = Keypair.generate().publicKey;
 
-            const tx = await program.methods
+            const tx = await (program.methods as any)
                 .batchInitializePrograms(projectName, version, usdcMint)
                 .accounts({
                     factory: factoryPda,
@@ -245,7 +245,7 @@ describe('MailBoxFactory', () => {
             const mailServiceProgram = Keypair.generate().publicKey;
 
             try {
-                await program.methods
+                await (program.methods as any)
                     .batchInitializePrograms(projectName, version, usdcMint)
                     .accounts({
                         factory: factoryPda,
@@ -266,7 +266,7 @@ describe('MailBoxFactory', () => {
         it('Should update version', async () => {
             const newVersion = 'v2.0.0';
 
-            const tx = await program.methods
+            const tx = await (program.methods as any)
                 .updateVersion(newVersion)
                 .accounts({
                     factory: factoryPda,
@@ -278,14 +278,14 @@ describe('MailBoxFactory', () => {
             console.log('Version update transaction:', tx);
 
             // Verify version was updated
-            const factoryAccount = await program.account.factoryState.fetch(factoryPda);
+            const factoryAccount = await (program.account as any).factoryState.fetch(factoryPda);
             expect(factoryAccount.version).to.equal(newVersion);
         });
 
         it('Should set new owner', async () => {
             const newOwner = user1.publicKey;
 
-            const tx = await program.methods
+            const tx = await (program.methods as any)
                 .setOwner(newOwner)
                 .accounts({
                     factory: factoryPda,
@@ -297,13 +297,13 @@ describe('MailBoxFactory', () => {
             console.log('Owner update transaction:', tx);
 
             // Verify owner was updated
-            const factoryAccount = await program.account.factoryState.fetch(factoryPda);
+            const factoryAccount = await (program.account as any).factoryState.fetch(factoryPda);
             expect(factoryAccount.owner.toString()).to.equal(newOwner.toString());
         });
 
         it('Should fail to update version as non-owner', async () => {
             try {
-                await program.methods
+                await (program.methods as any)
                     .updateVersion('v3.0.0')
                     .accounts({
                         factory: factoryPda,
@@ -327,7 +327,7 @@ describe('MailBoxFactory', () => {
                 { type: 'Mailer', network: 'testnet' }
             ];
 
-            const factoryBefore = await program.account.factoryState.fetch(factoryPda);
+            const factoryBefore = await (program.account as any).factoryState.fetch(factoryPda);
             const initialCount = factoryBefore.deploymentCount.toNumber();
 
             for (let i = 0; i < deployments.length; i++) {
@@ -343,7 +343,7 @@ describe('MailBoxFactory', () => {
                     program.programId
                 );
 
-                await program.methods
+                await (program.methods as any)
                     .registerDeployment(deployment.type, programId, deployment.network)
                     .accounts({
                         deployment: deploymentPda,
@@ -356,7 +356,7 @@ describe('MailBoxFactory', () => {
             }
 
             // Verify final count
-            const factoryAfter = await program.account.factoryState.fetch(factoryPda);
+            const factoryAfter = await (program.account as any).factoryState.fetch(factoryPda);
             expect(factoryAfter.deploymentCount.toNumber()).to.equal(initialCount + deployments.length);
         });
 
@@ -381,7 +381,7 @@ describe('MailBoxFactory', () => {
             const mailServiceProgramId = Keypair.generate().publicKey;
 
             for (const testCase of testCases) {
-                const result = await program.methods
+                const result = await (program.methods as any)
                     .predictAddresses(testCase.project, testCase.version)
                     .accounts({
                         mailerProgram: mailerProgramId,
