@@ -1,0 +1,281 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      
+      - name: Cache Solana Tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/solana
+            ~/.local/share/solana
+          key: solana-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            solana-${{ runner.os }}-
+      
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      
+      - name: Install Anchor CLI
+        run: |
+          npm install -g @coral-xyz/anchor-cli@0.30.1
+      
+      - name: Verify Solana installation
+        run: |
+          solana --version
+          anchor --version
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build Solana programs
+        run: |
+          anchor build
+      
+      - name: Build TypeScript library
+        run: npm run build
+      
+      - name: Start test validator
+        run: |
+          solana-test-validator --reset &
+          sleep 10
+          solana config set --url http://localhost:8899
+      
+      - name: Run tests
+        run: |
+          anchor test --skip-local-validator
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: matrix.node-version == 18  # Only upload once
+        with:
+          name: build-artifacts
+          path: |
+            target/idl/
+            target/types/
+            dist/
+          retention-days: 7
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
+      
+      - name: Check Prettier formatting
+        run: npm run prettier -- --check
+      
+      - name: TypeScript compilation check
+        run: npx tsc --noEmit
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run npm audit
+        run: npm audit --audit-level high
+      
+      - name: Check for package vulnerabilities
+        run: |
+          # Check if there are any high or critical vulnerabilities
+          AUDIT_RESULT=$(npm audit --json --audit-level high 2>/dev/null || echo '{"vulnerabilities": {}}')
+          echo "Audit result: $AUDIT_RESULT"
+          
+          # Parse and report vulnerabilities
+          HIGH_VULN=$(echo "$AUDIT_RESULT" | jq '.metadata.vulnerabilities.high // 0')
+          CRITICAL_VULN=$(echo "$AUDIT_RESULT" | jq '.metadata.vulnerabilities.critical // 0')
+          
+          echo "High vulnerabilities: $HIGH_VULN"
+          echo "Critical vulnerabilities: $CRITICAL_VULN"
+          
+          if [ "$HIGH_VULN" -gt 0 ] || [ "$CRITICAL_VULN" -gt 0 ]; then
+            echo "⚠️ Found security vulnerabilities"
+            npm audit --audit-level high
+            exit 1
+          else
+            echo "✅ No high or critical vulnerabilities found"
+          fi
+
+  build-check:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Cache Solana Tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/solana
+            ~/.local/share/solana
+          key: solana-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      
+      - name: Install Anchor CLI
+        run: |
+          npm install -g @coral-xyz/anchor-cli@0.30.1
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build Solana programs
+        run: |
+          anchor build
+      
+      - name: Build TypeScript library
+        run: npm run build
+      
+      - name: Verify package structure
+        run: |
+          echo "✅ Checking package structure..."
+          
+          # Check if required directories exist
+          [ -d "dist" ] && echo "✅ dist/ directory exists" || (echo "❌ dist/ directory missing" && exit 1)
+          [ -d "target/idl" ] && echo "✅ target/idl/ directory exists" || (echo "❌ target/idl/ directory missing" && exit 1)
+          [ -d "target/types" ] && echo "✅ target/types/ directory exists" || (echo "❌ target/types/ directory missing" && exit 1)
+          
+          # Check if main entry points exist
+          [ -f "dist/app/index.js" ] && echo "✅ Main entry point exists" || (echo "❌ Main entry point missing" && exit 1)
+          [ -f "dist/app/index.d.ts" ] && echo "✅ Type definitions exist" || (echo "❌ Type definitions missing" && exit 1)
+          
+          # Check IDL files
+          find target/idl -name "*.json" | head -5 | while read file; do
+            echo "✅ IDL file: $file"
+          done
+          
+          # List package contents
+          echo "📦 Package contents:"
+          ls -la dist/
+          ls -la target/idl/
+          ls -la target/types/
+      
+      - name: Test package installation simulation
+        run: |
+          echo "📦 Simulating package installation..."
+          npm pack --dry-run
+          echo "✅ Package would install successfully"
+
+  compatibility-check:
+    name: Node.js Compatibility
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16, 18, 20]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build TypeScript library
+        run: npm run build
+      
+      - name: Test package import
+        run: |
+          echo "🧪 Testing package import with Node.js ${{ matrix.node-version }}"
+          node -e "
+            try {
+              const pkg = require('./dist/app/index.js');
+              console.log('✅ Package imported successfully');
+              console.log('Available exports:', Object.keys(pkg));
+            } catch (error) {
+              console.error('❌ Package import failed:', error.message);
+              process.exit(1);
+            }
+          "

@@ -10,7 +10,8 @@
       "Bash(solana config:*)",
       "mcp__ide__getDiagnostics",
       "Bash(sed:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(npm audit:*)"
     ],
     "deny": [],
     "ask": []

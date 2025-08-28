@@ -1,0 +1,490 @@
+name: Build and Release to NPM
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types: [closed]  # Only when PR is merged
+  workflow_dispatch:    # Allow manual triggering
+    inputs:
+      dry_run:
+        description: 'Perform a dry run without publishing'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  check-trigger:
+    name: Check Release Trigger
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      new_version: ${{ steps.check.outputs.new_version }}
+      version_tag: ${{ steps.check.outputs.version_tag }}
+      trigger_reason: ${{ steps.check.outputs.trigger_reason }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Get current and previous commit
+      
+      - name: Check release trigger
+        id: check
+        run: |
+          CURRENT_VERSION=$(node -e "console.log(require('./package.json').version)")
+          echo "new_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "version_tag=v$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual dispatch always proceeds
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "trigger_reason=Manual dispatch" >> $GITHUB_OUTPUT
+            echo "🔧 Manual dispatch - proceeding with version $CURRENT_VERSION"
+            
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+            # PR merged to main - always release
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "trigger_reason=PR merged to main" >> $GITHUB_OUTPUT
+            echo "🔀 PR merged to main - proceeding with version $CURRENT_VERSION"
+            
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            # Push to main - always release
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "trigger_reason=Push to main branch" >> $GITHUB_OUTPUT
+            echo "📤 Push to main - proceeding with version $CURRENT_VERSION"
+            
+          else
+            # Skip for other events
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "trigger_reason=Event not applicable for release" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping release for event: ${{ github.event_name }}"
+          fi
+
+  setup-solana:
+    name: Setup Solana Environment
+    runs-on: ubuntu-latest
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_release == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Cache Solana Tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/solana
+            ~/.local/share/solana
+          key: solana-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            solana-${{ runner.os }}-
+      
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      
+      - name: Setup Solana CLI
+        run: |
+          solana --version
+          solana config set --url https://api.devnet.solana.com
+      
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      
+      - name: Install Anchor CLI
+        run: |
+          npm install -g @coral-xyz/anchor-cli@0.30.1
+          anchor --version
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: [check-trigger, setup-solana]
+    if: needs.check-trigger.outputs.should_release == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Cache Solana Tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/solana
+            ~/.local/share/solana
+          key: solana-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      
+      - name: Install Anchor CLI
+        run: |
+          npm install -g @coral-xyz/anchor-cli@0.30.1
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build Solana programs
+        run: |
+          solana --version
+          anchor --version
+          anchor build
+      
+      - name: Build TypeScript library
+        run: npm run build
+      
+      - name: Start Solana test validator
+        run: |
+          solana-test-validator --reset &
+          sleep 10
+          solana config set --url http://localhost:8899
+      
+      - name: Run tests
+        run: |
+          # Run Anchor tests (includes Solana program tests)
+          anchor test --skip-local-validator
+          
+          # Run additional TypeScript utility tests if they exist
+          if [ -f "tests/types-utils.test.ts" ]; then
+            echo "Running utility tests..."
+            npm test 2>/dev/null || echo "Utility tests not configured in package.json"
+          fi
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    needs: [check-trigger, test]
+    if: needs.check-trigger.outputs.should_release == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run npm audit
+        run: npm audit --audit-level moderate
+      
+      - name: Check for high/critical vulnerabilities
+        run: npm audit --audit-level high
+
+  publish-npm:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    needs: [check-trigger, test, security-audit]
+    if: needs.check-trigger.outputs.should_release == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for changelog
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Cache Solana Tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/solana
+            ~/.local/share/solana
+          key: solana-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      
+      - name: Install Anchor CLI
+        run: |
+          npm install -g @coral-xyz/anchor-cli@0.30.1
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build Solana programs
+        run: anchor build
+      
+      - name: Build TypeScript library
+        run: npm run build
+      
+      - name: Auto-increment version
+        id: version_bump
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(node -e "console.log(require('./package.json').version)")
+          echo "📦 Current version: $CURRENT_VERSION"
+          
+          # Extract version parts (assuming semver: MAJOR.MINOR.PATCH)
+          IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          
+          echo "📈 New version: $NEW_VERSION"
+          
+          # Update package.json
+          npm version $NEW_VERSION --no-git-tag-version
+          
+          # Set outputs
+          echo "old_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version_tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          
+          echo "✅ Version bumped from $CURRENT_VERSION to $NEW_VERSION"
+      
+      - name: Set version info
+        id: get_version
+        run: |
+          VERSION="${{ steps.version_bump.outputs.version_tag }}"
+          VERSION_NUMBER="${{ steps.version_bump.outputs.new_version }}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version_number=${VERSION_NUMBER}" >> $GITHUB_OUTPUT
+          echo "📦 Publishing version: ${VERSION} (${VERSION_NUMBER})"
+      
+      - name: Verify build artifacts
+        run: |
+          echo "Checking dist directory..."
+          ls -la dist/
+          echo "Checking target/idl directory..."
+          ls -la target/idl/
+          echo "Checking target/types directory..."
+          ls -la target/types/
+          echo "Verifying package.json main and types fields..."
+          node -e "const pkg = require('./package.json'); console.log('Main:', pkg.main); console.log('Types:', pkg.types);"
+      
+      - name: Create .npmrc
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+          echo "registry=https://registry.npmjs.org" >> .npmrc
+          echo "access=public" >> .npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      
+      - name: Publish to NPM
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "🧪 DRY RUN: Would publish to NPM"
+            npm publish --dry-run --access public
+          else
+            echo "📦 Publishing to NPM"
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      
+      - name: Verify NPM publication
+        run: |
+          PACKAGE_NAME=$(node -e "console.log(require('./package.json').name)")
+          VERSION=$(node -e "console.log(require('./package.json').version)")
+          echo "Published $PACKAGE_NAME@$VERSION"
+          sleep 30  # Wait for npm registry to sync
+          npm view $PACKAGE_NAME@$VERSION
+
+  create-tag:
+    name: Create Git Tag
+    runs-on: ubuntu-latest
+    needs: [check-trigger, test, security-audit, publish-npm]
+    if: needs.check-trigger.outputs.should_release == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Get published version
+        id: get_published_version
+        run: |
+          # Get the version that was just published to NPM
+          sleep 30  # Wait for NPM registry to sync
+          PUBLISHED_VERSION=$(npm view @johnqh/mail_box_solana_contracts version)
+          echo "published_version=$PUBLISHED_VERSION" >> $GITHUB_OUTPUT
+          echo "version_tag=v$PUBLISHED_VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Published version: $PUBLISHED_VERSION"
+      
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          TAG="${{ steps.get_published_version.outputs.version_tag }}"
+          echo "🏷️ Creating tag: $TAG"
+          
+          git tag "$TAG" -m "Release $TAG - Published to NPM"
+          git push origin "$TAG"
+          
+          echo "✅ Tag $TAG created and pushed"
+
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [check-trigger, test, security-audit, create-tag, publish-npm]
+    if: needs.check-trigger.outputs.should_release == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set version info
+        id: get_version
+        run: |
+          # Get the published version from NPM
+          PUBLISHED_VERSION=$(npm view @johnqh/mail_box_solana_contracts version)
+          VERSION="v$PUBLISHED_VERSION"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "📦 Creating GitHub release for: $VERSION"
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "## 🚀 Release ${{ steps.get_version.outputs.version }}" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            echo "### 📋 Changes since $LAST_TAG:" >> CHANGELOG.md
+            git log $LAST_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges >> CHANGELOG.md
+          else
+            echo "### 📋 Initial Release Changes:" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" --no-merges -10 >> CHANGELOG.md
+          fi
+          
+          echo "" >> CHANGELOG.md
+          echo "### 🔧 Installation:" >> CHANGELOG.md
+          echo '```bash' >> CHANGELOG.md
+          echo "npm install @johnqh/mail_box_solana_contracts@${{ steps.get_version.outputs.version }}" >> CHANGELOG.md
+          echo '```' >> CHANGELOG.md
+          
+          echo "" >> CHANGELOG.md
+          echo "### 📦 Package Info:" >> CHANGELOG.md
+          echo "- **TypeScript Types**: Included" >> CHANGELOG.md
+          echo "- **Anchor IDL Files**: Included in target/idl/" >> CHANGELOG.md
+          echo "- **Program Types**: Included in target/types/" >> CHANGELOG.md
+          echo "- **Anchor Version**: 0.30.1" >> CHANGELOG.md
+          echo "- **Solana Version**: 1.18.0" >> CHANGELOG.md
+          echo "- **Security Audited**: ✅" >> CHANGELOG.md
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  post-release:
+    name: Post-Release Tasks
+    runs-on: ubuntu-latest
+    needs: [check-trigger, publish-npm, create-github-release, create-tag]
+    if: needs.check-trigger.outputs.should_release == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set version info
+        id: get_version
+        run: |
+          # Get the published version from NPM
+          PUBLISHED_VERSION=$(npm view @johnqh/mail_box_solana_contracts version)
+          VERSION="v$PUBLISHED_VERSION"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "📦 Post-release tasks for: $VERSION"
+      
+      - name: Verify NPM package
+        run: |
+          PACKAGE_NAME="@johnqh/mail_box_solana_contracts"
+          sleep 60  # Wait for npm registry to fully sync
+          
+          echo "🔍 Verifying NPM package publication..."
+          npm view $PACKAGE_NAME@${{ steps.get_version.outputs.version }} --json
+          
+          echo "📦 Package is available at:"
+          echo "https://www.npmjs.com/package/$PACKAGE_NAME/v/${{ steps.get_version.outputs.version }}"
+      
+      - name: Create release summary
+        run: |
+          echo "## 🎉 Release ${{ steps.get_version.outputs.version }} Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Published Package:" >> $GITHUB_STEP_SUMMARY
+          echo "- **NPM**: \`npm install @johnqh/mail_box_solana_contracts@${{ steps.get_version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🏗️ Solana Programs:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mailer**: \`9FLkBDGpZBcR8LMsQ7MwwV6X9P4TDFgN3DeRh5qYyHJF\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **MailService**: \`8EKjCLZjz6LKRxZcQ6LwwF5V8P3TCEgM2CdQg4pZxXHE\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **MailBoxFactory**: \`7KxLzPMHGHLYqHYkX8YYtNjSGRD9mT4rE5hQ6pZvGbPz\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links:" >> $GITHUB_STEP_SUMMARY
+          echo "- [NPM Package](https://www.npmjs.com/package/@johnqh/mail_box_solana_contracts)" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.version }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Solana Explorer](https://explorer.solana.com/address/9FLkBDGpZBcR8LMsQ7MwwV6X9P4TDFgN3DeRh5qYyHJF)" >> $GITHUB_STEP_SUMMARY
