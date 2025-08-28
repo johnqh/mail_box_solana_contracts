@@ -1,18 +1,85 @@
+//! # Mailer Program
+//!
+//! A Solana program for decentralized messaging with USDC fees and revenue sharing.
+//!
+//! ## Key Features
+//!
+//! - **Priority Messages**: Full fee (0.1 USDC) with 90% revenue share back to sender
+//! - **Standard Messages**: 10% fee only (0.01 USDC) with no revenue share
+//! - **Revenue Claims**: 60-day claim period for priority message revenue shares
+//! - **Self-messaging**: All messages are sent to the sender's own address
+//!
+//! ## Program Architecture
+//!
+//! The program uses Program Derived Addresses (PDAs) for:
+//! - Mailer state: `[b"mailer"]`
+//! - Recipient claims: `[b"claim", recipient.key()]`
+//!
+//! ## Fee Structure
+//!
+//! - Send Fee: 0.1 USDC (100,000 with 6 decimals)
+//! - Priority: Sender pays full fee, gets 90% back as claimable
+//! - Standard: Sender pays 10% fee only
+//! - Owner gets 10% of all fees
+//!
+//! ## Usage Examples
+//!
+//! ```rust
+//! // Initialize the program
+//! initialize(ctx, usdc_mint_pubkey)?;
+//!
+//! // Send priority message (with revenue sharing)
+//! send_priority(ctx, "Subject".to_string(), "Body".to_string())?;
+//!
+//! // Claim revenue share within 60 days
+//! claim_recipient_share(ctx)?;
+//! ```
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use anchor_spl::associated_token::AssociatedToken;
 
+/// Program ID for the Mailer program
 declare_id!("9FLkBDGpZBcR8LMsQ7MwwV6X9P4TDFgN3DeRh5qYyHJF");
 
-const SEND_FEE: u64 = 100_000;         // 0.1 USDC (6 decimals)
-const CLAIM_PERIOD: i64 = 60 * 24 * 60 * 60; // 60 days in seconds
-const RECIPIENT_SHARE: u64 = 90;       // 90%
-const OWNER_SHARE: u64 = 10;           // 10%
+/// Base sending fee in USDC (with 6 decimals): 0.1 USDC
+const SEND_FEE: u64 = 100_000;
+
+/// Claim period for revenue shares: 60 days in seconds
+const CLAIM_PERIOD: i64 = 60 * 24 * 60 * 60;
+
+/// Percentage of fee that goes to message sender as revenue share: 90%
+const RECIPIENT_SHARE: u64 = 90;
+
+/// Percentage of fee that goes to program owner: 10%
+const OWNER_SHARE: u64 = 10;
 
 #[program]
 pub mod mailer {
     use super::*;
 
+    /// Initialize the Mailer program with USDC mint and owner
+    ///
+    /// This instruction creates the main program state account with default fees
+    /// and configuration. Only needs to be called once per program deployment.
+    ///
+    /// # Arguments
+    /// * `ctx` - Anchor context with required accounts
+    /// * `usdc_mint` - Public key of the USDC token mint (must have 6 decimals)
+    ///
+    /// # Accounts
+    /// * `mailer` - The main program state account (PDA)
+    /// * `owner` - Program owner with administrative privileges
+    /// * `system_program` - System program for account creation
+    ///
+    /// # Errors
+    /// Returns an error if account initialization fails
+    ///
+    /// # Example
+    /// ```rust
+    /// let usdc_mint = Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")?;
+    /// initialize(ctx, usdc_mint)?;
+    /// ```
     pub fn initialize(ctx: Context<Initialize>, usdc_mint: Pubkey) -> Result<()> {
         let mailer = &mut ctx.accounts.mailer;
         mailer.owner = ctx.accounts.owner.key();
@@ -23,6 +90,35 @@ pub mod mailer {
         Ok(())
     }
 
+    /// Send a priority message with full fee and 90% revenue sharing
+    ///
+    /// Priority messages cost the full send fee (0.1 USDC) but the sender receives
+    /// 90% back as claimable revenue within 60 days. This creates an incentive
+    /// system where frequent users can recover most of their costs.
+    ///
+    /// # Arguments
+    /// * `ctx` - Anchor context with required accounts
+    /// * `subject` - Message subject line (plain text)
+    /// * `body` - Message content (plain text)
+    ///
+    /// # Accounts
+    /// * `recipient_claim` - PDA to store claimable revenue for sender
+    /// * `mailer` - Main program state account
+    /// * `sender` - User sending the message (signer)
+    /// * `sender_usdc_account` - Sender's USDC associated token account
+    /// * `mailer_usdc_account` - Program's USDC associated token account
+    /// * `token_program` - SPL Token program
+    /// * `associated_token_program` - Associated Token program
+    /// * `system_program` - System program
+    ///
+    /// # Errors
+    /// * `InsufficientFunds` - If sender doesn't have enough USDC
+    /// * `TokenTransferFailed` - If USDC transfer fails
+    ///
+    /// # Example
+    /// ```rust
+    /// send_priority(ctx, "Important Update".to_string(), "This is urgent!".to_string())?;
+    /// ```
     pub fn send_priority(
         ctx: Context<SendMessage>,
         subject: String,
@@ -59,6 +155,28 @@ pub mod mailer {
         Ok(())
     }
 
+    /// Send a priority message using a pre-prepared mail identifier
+    ///
+    /// Similar to send_priority but uses a pre-prepared message ID instead of
+    /// subject/body. Useful for messages stored off-chain (IPFS, databases, etc.)
+    /// with the same fee structure and revenue sharing.
+    ///
+    /// # Arguments
+    /// * `ctx` - Anchor context with required accounts
+    /// * `mail_id` - Pre-prepared message identifier (e.g., IPFS hash, UUID)
+    ///
+    /// # Accounts
+    /// Same as send_priority
+    ///
+    /// # Errors
+    /// * `InsufficientFunds` - If sender doesn't have enough USDC
+    /// * `TokenTransferFailed` - If USDC transfer fails
+    ///
+    /// # Example
+    /// ```rust
+    /// let ipfs_hash = "QmX7Y8Z9...".to_string();
+    /// send_priority_prepared(ctx, ipfs_hash)?;
+    /// ```
     pub fn send_priority_prepared(
         ctx: Context<SendMessage>,
         mail_id: String,
@@ -93,6 +211,28 @@ pub mod mailer {
         Ok(())
     }
 
+    /// Send a standard message with 10% fee only (no revenue sharing)
+    ///
+    /// Standard messages are more cost-effective, charging only 10% of the base
+    /// fee (0.01 USDC) with no revenue share back to the sender. All fee goes
+    /// to the program owner.
+    ///
+    /// # Arguments
+    /// * `ctx` - Anchor context with required accounts
+    /// * `subject` - Message subject line (plain text)
+    /// * `body` - Message content (plain text)
+    ///
+    /// # Accounts
+    /// Same as send_priority (recipient_claim account still required but not used)
+    ///
+    /// # Errors
+    /// * `InsufficientFunds` - If sender doesn't have enough USDC
+    /// * `TokenTransferFailed` - If USDC transfer fails
+    ///
+    /// # Example
+    /// ```rust
+    /// send(ctx, "Regular Update".to_string(), "Standard message".to_string())?;
+    /// ```
     pub fn send(
         ctx: Context<SendMessage>,
         subject: String,
@@ -125,6 +265,27 @@ pub mod mailer {
         Ok(())
     }
 
+    /// Send a standard message using a pre-prepared mail identifier
+    ///
+    /// Cost-effective variant of send() using pre-prepared message IDs.
+    /// Charges only 10% fee with no revenue sharing.
+    ///
+    /// # Arguments
+    /// * `ctx` - Anchor context with required accounts
+    /// * `mail_id` - Pre-prepared message identifier
+    ///
+    /// # Accounts
+    /// Same as send_priority
+    ///
+    /// # Errors
+    /// * `InsufficientFunds` - If sender doesn't have enough USDC
+    /// * `TokenTransferFailed` - If USDC transfer fails
+    ///
+    /// # Example
+    /// ```rust
+    /// let message_uuid = "msg-12345".to_string();
+    /// send_prepared(ctx, message_uuid)?;
+    /// ```
     pub fn send_prepared(
         ctx: Context<SendMessage>,
         mail_id: String,

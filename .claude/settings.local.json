@@ -9,7 +9,8 @@
       "Bash(npx tsc:*)",
       "Bash(solana config:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []
