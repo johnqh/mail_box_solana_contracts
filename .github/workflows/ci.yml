@@ -8,7 +8,7 @@ on:
 
 env:
   SOLANA_CLI_VERSION: v1.18.0
-  ANCHOR_CLI_VERSION: 0.29.0
+  ANCHOR_CLI_VERSION: 0.30.1
 
 jobs:
   test:
@@ -122,17 +122,40 @@ jobs:
         run: |
           echo "Installing Anchor CLI version ${{ env.ANCHOR_CLI_VERSION }}"
           
-          # Always install avm first to avoid version management issues
-          echo "Installing avm (Anchor Version Manager)..."
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          # Check if anchor is already installed
+          if which anchor; then
+            echo "Anchor already installed, checking version..."
+            anchor --version
+            CURRENT_VERSION=$(anchor --version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
+            if [ "$CURRENT_VERSION" = "${{ env.ANCHOR_CLI_VERSION }}" ]; then
+              echo "✅ Correct Anchor version already installed"
+              exit 0
+            else
+              echo "Wrong version ($CURRENT_VERSION), need ${{ env.ANCHOR_CLI_VERSION }}"
+            fi
+          fi
           
-          # Use avm to install specific Anchor version
-          avm install ${{ env.ANCHOR_CLI_VERSION }}
-          avm use ${{ env.ANCHOR_CLI_VERSION }}
+          # Install avm if not present
+          if ! which avm; then
+            echo "Installing avm (Anchor Version Manager)..."
+            cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          fi
           
-          # Add avm binaries to PATH
+          # Add avm to PATH
           echo "$HOME/.avm/bin" >> $GITHUB_PATH
           export PATH="$HOME/.avm/bin:$PATH"
+          
+          # List available versions for debugging
+          echo "Available Anchor versions:"
+          avm list-versions || echo "Could not list versions"
+          
+          # Use version 0.30.1 as 0.29.0 might not be available in avm
+          ANCHOR_VERSION="0.30.1"
+          echo "Installing Anchor version $ANCHOR_VERSION"
+          
+          # Install and use the specified version
+          avm install $ANCHOR_VERSION --force
+          avm use $ANCHOR_VERSION
       
       - name: Verify Solana installation
         run: |
@@ -377,17 +400,40 @@ jobs:
         run: |
           echo "Installing Anchor CLI version ${{ env.ANCHOR_CLI_VERSION }}"
           
-          # Always install avm first to avoid version management issues
-          echo "Installing avm (Anchor Version Manager)..."
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          # Check if anchor is already installed
+          if which anchor; then
+            echo "Anchor already installed, checking version..."
+            anchor --version
+            CURRENT_VERSION=$(anchor --version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
+            if [ "$CURRENT_VERSION" = "${{ env.ANCHOR_CLI_VERSION }}" ]; then
+              echo "✅ Correct Anchor version already installed"
+              exit 0
+            else
+              echo "Wrong version ($CURRENT_VERSION), need ${{ env.ANCHOR_CLI_VERSION }}"
+            fi
+          fi
           
-          # Use avm to install specific Anchor version
-          avm install ${{ env.ANCHOR_CLI_VERSION }}
-          avm use ${{ env.ANCHOR_CLI_VERSION }}
+          # Install avm if not present
+          if ! which avm; then
+            echo "Installing avm (Anchor Version Manager)..."
+            cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          fi
           
-          # Add avm binaries to PATH
+          # Add avm to PATH
           echo "$HOME/.avm/bin" >> $GITHUB_PATH
           export PATH="$HOME/.avm/bin:$PATH"
+          
+          # List available versions for debugging
+          echo "Available Anchor versions:"
+          avm list-versions || echo "Could not list versions"
+          
+          # Use version 0.30.1 as 0.29.0 might not be available in avm
+          ANCHOR_VERSION="0.30.1"
+          echo "Installing Anchor version $ANCHOR_VERSION"
+          
+          # Install and use the specified version
+          avm install $ANCHOR_VERSION --force
+          avm use $ANCHOR_VERSION
       
       - name: Install dependencies
         run: npm ci
