@@ -11,7 +11,7 @@ import {
     getAssociatedTokenAddressSync
 } from '@solana/spl-token';
 import { Mailer } from '../target/types/mailer';
-import { ClaimableInfo, MailerFees, formatUSDC, CLAIM_PERIOD_DAYS } from './types.js';
+import { ClaimableInfo, MailerFees, formatUSDC, CLAIM_PERIOD_DAYS } from './types';
 
 /**
  * @class MailerClient

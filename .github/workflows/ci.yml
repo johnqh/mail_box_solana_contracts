@@ -149,13 +149,12 @@ jobs:
           echo "Available Anchor versions:"
           avm list-versions || echo "Could not list versions"
           
-          # Use version 0.30.1 as 0.29.0 might not be available in avm
-          ANCHOR_VERSION="0.30.1"
-          echo "Installing Anchor version $ANCHOR_VERSION"
+          # Use the specified version from environment
+          echo "Installing Anchor version ${{ env.ANCHOR_CLI_VERSION }}"
           
           # Install and use the specified version
-          avm install $ANCHOR_VERSION --force
-          avm use $ANCHOR_VERSION
+          avm install ${{ env.ANCHOR_CLI_VERSION }} --force
+          avm use ${{ env.ANCHOR_CLI_VERSION }}
       
       - name: Verify Solana installation
         run: |
@@ -427,13 +426,12 @@ jobs:
           echo "Available Anchor versions:"
           avm list-versions || echo "Could not list versions"
           
-          # Use version 0.30.1 as 0.29.0 might not be available in avm
-          ANCHOR_VERSION="0.30.1"
-          echo "Installing Anchor version $ANCHOR_VERSION"
+          # Use the specified version from environment
+          echo "Installing Anchor version ${{ env.ANCHOR_CLI_VERSION }}"
           
           # Install and use the specified version
-          avm install $ANCHOR_VERSION --force
-          avm use $ANCHOR_VERSION
+          avm install ${{ env.ANCHOR_CLI_VERSION }} --force
+          avm use ${{ env.ANCHOR_CLI_VERSION }}
       
       - name: Install dependencies
         run: npm ci
