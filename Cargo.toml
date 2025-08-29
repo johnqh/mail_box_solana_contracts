@@ -9,5 +9,5 @@ members = [
 overflow-checks = true
 
 [workspace.dependencies]
-anchor-lang = "0.29.0"
-anchor-spl = "0.29.0"
+anchor-lang = "0.28.0"
+anchor-spl = "0.28.0"

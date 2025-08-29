@@ -8,7 +8,7 @@ on:
 
 env:
   SOLANA_CLI_VERSION: v1.18.0
-  ANCHOR_CLI_VERSION: 0.29.0
+  ANCHOR_CLI_VERSION: 0.28.0
 
 jobs:
   test:
