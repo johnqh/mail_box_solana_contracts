@@ -13,7 +13,7 @@ import {
     getAssociatedTokenAddressSync
 } from '@solana/spl-token';
 import { MailService } from '../target/types/mail_service';
-import { DelegationInfo, MailServiceFees, formatUSDC } from './types';
+import { DelegationInfo, MailServiceFees, formatUSDC } from './types.js';
 
 /**
  * @class MailServiceClient
