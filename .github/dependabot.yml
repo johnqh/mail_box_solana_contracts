@@ -1,0 +1,49 @@
+version: 2
+updates:
+  # Enable version updates for npm
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Limit to security updates and patch-level updates
+    open-pull-requests-limit: 10
+    # Group related updates together
+    groups:
+      solana-ecosystem:
+        patterns:
+          - "@solana/*"
+          - "@coral-xyz/*"
+      test-frameworks:
+        patterns:
+          - "chai"
+          - "mocha"
+          - "ts-mocha"
+          - "@types/chai"
+          - "@types/mocha"
+      dev-dependencies:
+        dependency-type: "development"
+        exclude-patterns:
+          - "@solana/*"
+          - "@coral-xyz/*"
+    # Ignore specific packages that we need to control manually
+    ignore:
+      # Keep Anchor at specific version for Solana compatibility
+      - dependency-name: "@coral-xyz/anchor"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "@coral-xyz/borsh"  
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # Solana packages need careful version management
+      - dependency-name: "@solana/*"
+        update-types: ["version-update:semver-major"]
+      # Test frameworks - avoid breaking changes
+      - dependency-name: "chai"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "mocha"
+        update-types: ["version-update:semver-major"] 
+      - dependency-name: "@types/chai"
+        update-types: ["version-update:semver-major"]
+    # Custom commit messages
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
