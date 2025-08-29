@@ -8,7 +8,7 @@ on:
 
 env:
   SOLANA_CLI_VERSION: v1.18.0
-  ANCHOR_CLI_VERSION: 0.28.0
+  ANCHOR_CLI_VERSION: 0.30.0
 
 jobs:
   test:
@@ -153,8 +153,19 @@ jobs:
           echo "Installing Anchor version ${{ env.ANCHOR_CLI_VERSION }}"
           
           # Install and use the specified version
-          avm install ${{ env.ANCHOR_CLI_VERSION }} --force
-          avm use ${{ env.ANCHOR_CLI_VERSION }}
+          echo "Installing Anchor ${{ env.ANCHOR_CLI_VERSION }}..."
+          if ! avm install ${{ env.ANCHOR_CLI_VERSION }} --force; then
+            echo "Failed to install ${{ env.ANCHOR_CLI_VERSION }} with --force, trying without..."
+            if ! avm install ${{ env.ANCHOR_CLI_VERSION }}; then
+              echo "Failed to install ${{ env.ANCHOR_CLI_VERSION }}, trying alternative installation method..."
+              cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_CLI_VERSION }} anchor-cli --force
+            fi
+          fi
+          
+          # Use the installed version
+          if which avm && avm list | grep -q "${{ env.ANCHOR_CLI_VERSION }}"; then
+            avm use ${{ env.ANCHOR_CLI_VERSION }}
+          fi
       
       - name: Verify Solana installation
         run: |
@@ -430,8 +441,19 @@ jobs:
           echo "Installing Anchor version ${{ env.ANCHOR_CLI_VERSION }}"
           
           # Install and use the specified version
-          avm install ${{ env.ANCHOR_CLI_VERSION }} --force
-          avm use ${{ env.ANCHOR_CLI_VERSION }}
+          echo "Installing Anchor ${{ env.ANCHOR_CLI_VERSION }}..."
+          if ! avm install ${{ env.ANCHOR_CLI_VERSION }} --force; then
+            echo "Failed to install ${{ env.ANCHOR_CLI_VERSION }} with --force, trying without..."
+            if ! avm install ${{ env.ANCHOR_CLI_VERSION }}; then
+              echo "Failed to install ${{ env.ANCHOR_CLI_VERSION }}, trying alternative installation method..."
+              cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_CLI_VERSION }} anchor-cli --force
+            fi
+          fi
+          
+          # Use the installed version
+          if which avm && avm list | grep -q "${{ env.ANCHOR_CLI_VERSION }}"; then
+            avm use ${{ env.ANCHOR_CLI_VERSION }}
+          fi
       
       - name: Install dependencies
         run: npm ci
