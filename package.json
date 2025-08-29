@@ -11,7 +11,10 @@
   ],
   "scripts": {
     "build": "tsc",
+    "build:contracts": "anchor build",
     "test": "npm run build && npx mocha dist/tests/types-utils.test.js --reporter spec",
+    "test:contracts": "anchor test --skip-local-validator",
+    "test:contracts:local": "anchor test",
     "test:all": "npm run build && npx mocha dist/tests/types-utils.test.js --reporter spec",
     "lint": "eslint . --ext .ts,.js",
     "prettier": "prettier --write .",
