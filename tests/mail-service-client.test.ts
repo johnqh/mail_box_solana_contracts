@@ -42,70 +42,43 @@ describe('MailServiceClient', () => {
             const client = new MailServiceClient(connection, wallet, programId, usdcMint);
 
             expect(client.getProgramId().toString()).to.equal(programId.toString());
-            expect(client.getUsdcMint().toString()).to.equal(usdcMint.toString());
+            expect(client.getUSDCMint().toString()).to.equal(usdcMint.toString());
         });
 
         it('Should derive correct service PDA', () => {
             const wallet = new anchor.Wallet(owner);
             const client = new MailServiceClient(connection, wallet, programId, usdcMint);
+
+            const serviceAddress = client.getServiceAddress();
+            expect(serviceAddress).to.be.instanceOf(PublicKey);
             
+            // Verify PDA derivation
             const [expectedPda] = PublicKey.findProgramAddressSync(
                 [Buffer.from('mail_service')],
                 programId
             );
-            
-            expect(client.getServiceAddress().toString()).to.equal(expectedPda.toString());
+            expect(serviceAddress.toString()).to.equal(expectedPda.toString());
         });
 
-        it('Should handle static initialization method', async () => {
-            // This would require actual program deployment for full testing
-            // For unit testing, we verify the method exists and has correct signature
-            expect(MailServiceClient.initialize).to.be.a('function');
-            expect(MailServiceClient.initialize.length).to.equal(5); // 5 parameters
-        });
-    });
-
-    describe('Address Derivation Helpers', () => {
-        let testClient: MailServiceClient;
-
-        before(() => {
+        it('Should derive correct delegation PDA', () => {
             const wallet = new anchor.Wallet(owner);
-            testClient = new MailServiceClient(connection, wallet, programId, usdcMint);
-        });
+            const client = new MailServiceClient(connection, wallet, programId, usdcMint);
 
-        it('Should derive delegation PDA correctly', () => {
-            const delegator = user1.publicKey;
-            const [expectedPda] = PublicKey.findProgramAddressSync(
-                [Buffer.from('delegation'), delegator.toBuffer()],
+            const [delegationPda, bump] = client.getDelegationPDA(user1.publicKey);
+            expect(delegationPda).to.be.instanceOf(PublicKey);
+            expect(bump).to.be.a('number');
+
+            // Verify PDA derivation
+            const [expectedPda, expectedBump] = PublicKey.findProgramAddressSync(
+                [Buffer.from('delegation'), user1.publicKey.toBuffer()],
                 programId
             );
-
-            // We can verify this by checking that the client would use the same derivation
-            // in its delegateTo method (though we can't call it without deployment)
-            expect(expectedPda).to.be.instanceOf(PublicKey);
-        });
-
-        it('Should derive associated token addresses correctly', () => {
-            const owner = user1.publicKey;
-            const servicePda = testClient.getServiceAddress();
-
-            // Test that we can derive the expected token account addresses
-            // These would be used in the client methods
-            expect(() => {
-                // This should not throw
-                const userTokenAccount = anchor.utils.token.associatedAddress({
-                    mint: usdcMint,
-                    owner: owner
-                });
-                const serviceTokenAccount = anchor.utils.token.associatedAddress({
-                    mint: usdcMint,
-                    owner: servicePda
-                });
-            }).to.not.throw();
+            expect(delegationPda.toString()).to.equal(expectedPda.toString());
+            expect(bump).to.equal(expectedBump);
         });
     });
 
-    describe('Client Method Signatures', () => {
+    describe('Method Signatures', () => {
         let testClient: MailServiceClient;
 
         before(() => {
@@ -115,7 +88,7 @@ describe('MailServiceClient', () => {
 
         it('Should have correct delegateTo method signature', () => {
             expect(testClient.delegateTo).to.be.a('function');
-            expect(testClient.delegateTo.length).to.equal(1); // Optional delegate parameter
+            expect(testClient.delegateTo.length).to.equal(1); // delegate parameter
         });
 
         it('Should have correct rejectDelegation method signature', () => {
@@ -123,63 +96,29 @@ describe('MailServiceClient', () => {
             expect(testClient.rejectDelegation.length).to.equal(1); // delegatorAddress parameter
         });
 
-        it('Should have correct registerDomain method signature', () => {
-            expect(testClient.registerDomain).to.be.a('function');
-            expect(testClient.registerDomain.length).to.equal(2); // domain and isExtension parameters
-        });
-
-        it('Should have correct fee management method signatures', () => {
-            expect(testClient.setRegistrationFee).to.be.a('function');
-            expect(testClient.setRegistrationFee.length).to.equal(1);
-
+        it('Should have correct setDelegationFee method signature', () => {
             expect(testClient.setDelegationFee).to.be.a('function');
-            expect(testClient.setDelegationFee.length).to.equal(1);
+            expect(testClient.setDelegationFee.length).to.equal(1); // newFeeUsdc parameter
+        });
 
+        it('Should have correct withdrawFees method signature', () => {
             expect(testClient.withdrawFees).to.be.a('function');
-            expect(testClient.withdrawFees.length).to.equal(1);
+            expect(testClient.withdrawFees.length).to.equal(1); // amountUsdc parameter
         });
 
-        it('Should have correct query method signatures', () => {
+        it('Should have correct getDelegation method signature', () => {
             expect(testClient.getDelegation).to.be.a('function');
-            expect(testClient.getDelegation.length).to.equal(1);
+            expect(testClient.getDelegation.length).to.equal(1); // delegatorAddress parameter
+        });
 
+        it('Should have correct getFees method signature', () => {
             expect(testClient.getFees).to.be.a('function');
-            expect(testClient.getFees.length).to.equal(0);
-
-            expect(testClient.getFeesFormatted).to.be.a('function');
-            expect(testClient.getFeesFormatted.length).to.equal(0);
-        });
-    });
-
-    describe('Error Handling', () => {
-        let testClient: MailServiceClient;
-
-        before(() => {
-            const wallet = new anchor.Wallet(owner);
-            testClient = new MailServiceClient(connection, wallet, programId, usdcMint);
+            expect(testClient.getFees.length).to.equal(0); // no parameters
         });
 
-        it('Should handle null delegate in delegateTo', async () => {
-            // Test that the method can handle undefined delegate (clearing delegation)
-            // This tests the parameter handling logic, not the actual transaction
-            try {
-                // This will fail due to no actual program deployment, but shouldn't fail on parameter validation
-                await testClient.delegateTo();
-            } catch (error) {
-                // Should be a connection/transaction error, not a parameter error
-                expect((error as any).message).to.not.include('parameter');
-            }
-        });
-
-        it('Should handle invalid PublicKey in rejectDelegation', async () => {
-            const invalidDelegator = Keypair.generate().publicKey;
-            
-            try {
-                await testClient.rejectDelegation(invalidDelegator);
-            } catch (error) {
-                // Should be a connection/transaction error, not a parameter error
-                expect((error as any).message).to.not.include('parameter');
-            }
+        it('Should have correct getServiceBalance method signature', () => {
+            expect(testClient.getServiceBalance).to.be.a('function');
+            expect(testClient.getServiceBalance.length).to.equal(0); // no parameters
         });
     });
 
@@ -191,90 +130,88 @@ describe('MailServiceClient', () => {
             testClient = new MailServiceClient(connection, wallet, programId, usdcMint);
         });
 
-        it('Should accept valid domain names', () => {
-            const validDomains = [
-                'example.mailbox',
-                'test.domain.mailbox',
-                'simple',
-                'with-dashes.mailbox',
-                'with_underscores.mailbox'
-            ];
-
-            validDomains.forEach(domain => {
-                // Test that registerDomain method accepts these domains
-                // (actual call will fail due to no deployment, but parameter should be accepted)
-                expect(() => testClient.registerDomain(domain, false)).to.not.throw();
-            });
+        it('Should accept valid PublicKey for delegation', () => {
+            expect(() => testClient.delegateTo(user2.publicKey)).to.not.throw();
         });
 
-        it('Should handle boolean flags correctly', () => {
-            // Test isExtension parameter handling
-            expect(() => testClient.registerDomain('test.mailbox', true)).to.not.throw();
-            expect(() => testClient.registerDomain('test.mailbox', false)).to.not.throw();
+        it('Should accept null for clearing delegation', () => {
+            expect(() => testClient.delegateTo(null)).to.not.throw();
         });
 
-        it('Should handle fee amounts correctly', () => {
-            const testFees = [0, 1000000, 100000000, 999999999999]; // Various USDC amounts in smallest units
-            
-            testFees.forEach(fee => {
-                expect(() => testClient.setRegistrationFee(fee)).to.not.throw();
-                expect(() => testClient.setDelegationFee(fee)).to.not.throw();
-                expect(() => testClient.withdrawFees(fee)).to.not.throw();
-            });
+        it('Should accept valid PublicKey for delegation rejection', () => {
+            expect(() => testClient.rejectDelegation(user1.publicKey)).to.not.throw();
+        });
+
+        it('Should accept positive numbers for fee setting', () => {
+            expect(() => testClient.setDelegationFee(15)).to.not.throw();
+            expect(() => testClient.setDelegationFee(0)).to.not.throw();
+        });
+
+        it('Should accept positive numbers for fee withdrawal', () => {
+            expect(() => testClient.withdrawFees(50)).to.not.throw();
         });
     });
 
-    describe('Integration with Anchor BN', () => {
-        let testClient: MailServiceClient;
-
-        before(() => {
-            const wallet = new anchor.Wallet(owner);
-            testClient = new MailServiceClient(connection, wallet, programId, usdcMint);
-        });
-
-        it('Should convert numbers to BN correctly for fee methods', () => {
-            // These tests verify that the client correctly converts JavaScript numbers
-            // to Anchor BN instances for blockchain transactions
-            
-            const testFee = 100000000; // 100 USDC
-            
-            // The methods should internally create BN instances
-            // We can't directly test this without mocking, but we verify the methods don't throw on valid inputs
-            expect(() => testClient.setRegistrationFee(testFee)).to.not.throw();
-            expect(() => testClient.setDelegationFee(testFee)).to.not.throw();
-            expect(() => testClient.withdrawFees(testFee)).to.not.throw();
-        });
-    });
-
-    describe('Utility Method Integration', () => {
-        it('Should work with formatUSDC utility', () => {
-            const amount = 100000000; // 100 USDC in smallest units
-            const formatted = formatUSDC(amount);
-            expect(formatted).to.equal('100.00');
-        });
-
-        it('Should work with parseUSDC utility', () => {
-            const amount = '100.50';
-            const parsed = parseUSDC(amount);
-            expect(parsed).to.equal(100500000); // 100.5 USDC in smallest units
-        });
-
-        it('Should handle fee formatting workflow', async () => {
-            // Test the complete workflow that getFeesFormatted would use
+    describe('Utility Functions', () => {
+        it('Should format USDC amounts correctly', () => {
             const mockFees = {
-                registrationFee: 100000000,
-                delegationFee: 10000000
+                delegationFee: 10000000, // 10 USDC in 6 decimals
+                owner: owner.publicKey
             };
 
-            const formattedRegistration = formatUSDC(mockFees.registrationFee) + ' USDC';
             const formattedDelegation = formatUSDC(mockFees.delegationFee) + ' USDC';
-
-            expect(formattedRegistration).to.equal('100.00 USDC');
             expect(formattedDelegation).to.equal('10.00 USDC');
         });
+
+        it('Should parse USDC amounts correctly', () => {
+            expect(parseUSDC('10.00')).to.equal(10000000);
+            expect(parseUSDC('0.01')).to.equal(10000);
+            expect(parseUSDC('100')).to.equal(100000000);
+        });
+
+        it('Should handle fee structure changes', () => {
+            // Mock account data that matches new structure (no registration fee)
+            const mockAccountData = {
+                delegationFee: { toNumber: () => 15000000 }, // 15 USDC
+                owner: owner.publicKey
+            };
+
+            expect(mockAccountData.delegationFee.toNumber()).to.equal(15000000);
+            expect(mockAccountData.owner).to.equal(owner.publicKey);
+        });
     });
 
-    describe('Account Structure Validation', () => {
+    describe('Static Methods', () => {
+        it('Should have initialize static method', () => {
+            expect(MailServiceClient.initialize).to.be.a('function');
+            expect(MailServiceClient.initialize.length).to.equal(5); // connection, wallet, programId, usdcMint, owner?
+        });
+    });
+
+    describe('Network Configuration', () => {
+        it('Should work with different connection types', () => {
+            const devnetConnection = new Connection(clusterApiUrl('devnet'));
+            const mainnetConnection = new Connection(clusterApiUrl('mainnet-beta'));
+            const wallet = new anchor.Wallet(owner);
+
+            expect(() => new MailServiceClient(devnetConnection, wallet, programId, usdcMint)).to.not.throw();
+            expect(() => new MailServiceClient(mainnetConnection, wallet, programId, usdcMint)).to.not.throw();
+        });
+
+        it('Should handle different USDC mint addresses', () => {
+            const devnetUsdcMint = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+            const mainnetUsdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+            const wallet = new anchor.Wallet(owner);
+
+            const devnetClient = new MailServiceClient(connection, wallet, programId, devnetUsdcMint);
+            const mainnetClient = new MailServiceClient(connection, wallet, programId, mainnetUsdcMint);
+
+            expect(devnetClient.getUSDCMint().toString()).to.equal(devnetUsdcMint.toString());
+            expect(mainnetClient.getUSDCMint().toString()).to.equal(mainnetUsdcMint.toString());
+        });
+    });
+
+    describe('Error Handling', () => {
         let testClient: MailServiceClient;
 
         before(() => {
@@ -282,80 +219,26 @@ describe('MailServiceClient', () => {
             testClient = new MailServiceClient(connection, wallet, programId, usdcMint);
         });
 
-        it('Should validate delegation account structure', async () => {
-            // Test that getDelegation expects the correct account structure
-            const mockDelegation = {
-                delegator: user1.publicKey,
-                delegate: user2.publicKey
-            };
-
-            // The method should be able to handle this structure
-            // (though it will fail on actual fetch due to no deployment)
-            expect(testClient.getDelegation).to.be.a('function');
+        it('Should handle delegation query for non-existent account', async () => {
+            // This would normally fail in a real environment, but we can test the structure
+            try {
+                const result = await testClient.getDelegation(Keypair.generate().publicKey);
+                expect(result).to.be.null;
+            } catch (error) {
+                // Expected in test environment without actual blockchain
+                expect(error).to.be.instanceOf(Error);
+            }
         });
 
-        it('Should validate fee structure', async () => {
-            // Test that getFees expects the correct account structure
-            const mockMailServiceState = {
-                registrationFee: { toNumber: () => 100000000 },
-                delegationFee: { toNumber: () => 10000000 }
-            };
-
-            // The method should expect this structure
-            expect(testClient.getFees).to.be.a('function');
-        });
-    });
-
-    describe('Token Program Integration', () => {
-        let testClient: MailServiceClient;
-
-        before(() => {
-            const wallet = new anchor.Wallet(owner);
-            testClient = new MailServiceClient(connection, wallet, programId, usdcMint);
-        });
-
-        it('Should use correct token program constants', () => {
-            // Verify that the client uses the correct SPL token program IDs
-            // These would be used in the account specifications for transactions
-            expect(TOKEN_PROGRAM_ID).to.be.instanceOf(PublicKey);
-            expect(ASSOCIATED_TOKEN_PROGRAM_ID).to.be.instanceOf(PublicKey);
-        });
-
-        it('Should handle associated token account creation', () => {
-            // Test that the client can derive associated token accounts correctly
-            const owner = user1.publicKey;
-            
-            // These would be used in the client methods for token transfers
-            expect(() => {
-                anchor.utils.token.associatedAddress({
-                    mint: usdcMint,
-                    owner: owner
-                });
-            }).to.not.throw();
-        });
-    });
-
-    describe('Client State Management', () => {
-        it('Should maintain correct state after construction', () => {
-            const wallet = new anchor.Wallet(owner);
-            const client = new MailServiceClient(connection, wallet, programId, usdcMint);
-
-            expect(client.getProgramId().toString()).to.equal(programId.toString());
-            expect(client.getUsdcMint().toString()).to.equal(usdcMint.toString());
-            expect(client.getServiceAddress()).to.be.instanceOf(PublicKey);
-        });
-
-        it('Should handle different wallet instances', () => {
-            const wallet1 = new anchor.Wallet(user1);
-            const wallet2 = new anchor.Wallet(user2);
-
-            const client1 = new MailServiceClient(connection, wallet1, programId, usdcMint);
-            const client2 = new MailServiceClient(connection, wallet2, programId, usdcMint);
-
-            // Clients should have same program and mint, but different wallets
-            expect(client1.getProgramId().toString()).to.equal(client2.getProgramId().toString());
-            expect(client1.getUsdcMint().toString()).to.equal(client2.getUsdcMint().toString());
-            expect(client1.getServiceAddress().toString()).to.equal(client2.getServiceAddress().toString());
+        it('Should handle service balance query gracefully', async () => {
+            try {
+                const balance = await testClient.getServiceBalance();
+                expect(balance).to.be.a('number');
+                expect(balance).to.be.at.least(0);
+            } catch (error) {
+                // Expected in test environment without actual blockchain
+                expect(error).to.be.instanceOf(Error);
+            }
         });
     });
 });

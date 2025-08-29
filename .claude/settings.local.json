@@ -11,7 +11,12 @@
       "mcp__ide__getDiagnostics",
       "Bash(sed:*)",
       "Bash(git log:*)",
-      "Bash(npm audit:*)"
+      "Bash(npm audit:*)",
+      "Bash(git commit:*)",
+      "Bash(git add:*)",
+      "WebSearch",
+      "Bash(npm install:*)",
+      "Bash(solana:*)"
     ],
     "deny": [],
     "ask": []

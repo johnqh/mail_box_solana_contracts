@@ -18,14 +18,13 @@ import { DelegationInfo, MailServiceFees, formatUSDC } from './types';
 /**
  * @class MailServiceClient
  * @description High-level TypeScript client for the MailService program on Solana
- * @notice Provides easy-to-use methods for domain registration and delegation management
+ * @notice Provides easy-to-use methods for delegation management with USDC fees
  * 
  * ## Key Features:
- * - **Domain Registration**: Register domains for 100 USDC with 1-year expiration
- * - **Domain Extension**: Extend existing domain registrations for another year
  * - **Delegation Management**: Delegate mail handling to other addresses for 10 USDC
  * - **Delegation Rejection**: Allow delegates to reject unwanted delegations
- * - **Fee Management**: Owner can update registration and delegation fees
+ * - **Fee Management**: Owner can update delegation fees
+ * - **Fee Withdrawal**: Owner can withdraw collected fees
  * 
  * ## Usage Examples:
  * ```typescript
@@ -34,14 +33,14 @@ import { DelegationInfo, MailServiceFees, formatUSDC } from './types';
  * const wallet = new Wallet(keypair);
  * const client = new MailServiceClient(connection, wallet, programId, usdcMint);
  * 
- * // Register a domain
- * await client.registerDomain('mydomain.sol', false);
- * 
  * // Set up delegation
  * await client.delegateTo(delegatePublicKey);
  * 
  * // Check delegation status
  * const delegate = await client.getDelegation(wallet.publicKey);
+ * 
+ * // Reject delegation (if you're the delegate)
+ * await client.rejectDelegation(delegatorPublicKey);
  * ```
  * 
  * @author MailBox Team
@@ -100,14 +99,14 @@ export class MailServiceClient {
      * @throws {Error} If initialization fails or accounts cannot be created
      * @example
      * ```typescript
+     * // Deploy new MailService program
      * const client = await MailServiceClient.initialize(
-     *     connection,
-     *     wallet,
-     *     programId,
-     *     usdcMint,
-     *     ownerPublicKey
+     *   connection,
+     *   wallet,
+     *   programId,
+     *   usdcMint
      * );
-     * console.log('MailService initialized at:', client.getServiceAddress());
+     * console.log('MailService initialized at:', client.getProgramId().toString());
      * ```
      */
     static async initialize(
@@ -118,64 +117,70 @@ export class MailServiceClient {
         owner?: PublicKey
     ): Promise<MailServiceClient> {
         const client = new MailServiceClient(connection, wallet, programId, usdcMint);
-        await client.initializeProgram(owner || wallet.publicKey);
-        return client;
-    }
-
-    private async initializeProgram(owner: PublicKey): Promise<void> {
-        await ((this.program.methods as any) as any)
-            .initialize(this.usdcMint)
-            .accounts({
-                mailService: this.mailServicePda,
-                owner: owner,
-                systemProgram: SystemProgram.programId,
-            })
-            .rpc();
+        
+        const ownerKey = owner || wallet.publicKey;
+        
+        try {
+            const tx = await client.program.methods
+                .initialize(usdcMint)
+                .accounts({
+                    mailService: client.mailServicePda,
+                    owner: ownerKey,
+                    systemProgram: SystemProgram.programId,
+                })
+                .rpc();
+                
+            console.log('MailService initialized with transaction:', tx);
+            return client;
+        } catch (error) {
+            throw new Error(`Failed to initialize MailService: ${error}`);
+        }
     }
 
     /**
-     * @description Delegate mail handling to another address or clear existing delegation
-     * @notice Costs 10 USDC to set delegation, free to clear (pass undefined)
-     * @param delegate Target delegate address, or undefined to clear delegation
-     * @returns Promise resolving to transaction signature
-     * @throws {Error} If insufficient USDC balance (when setting) or transaction fails
+     * @description Delegate mail handling to another address with USDC fee payment
+     * @param delegate Public key of the address to delegate to (null to clear delegation)
+     * @returns Promise resolving to the transaction signature
+     * @throws {Error} If delegation setup fails or insufficient USDC balance
      * @example
      * ```typescript
-     * // Set delegation to another address (costs 10 USDC)
-     * const tx1 = await client.delegateTo(delegatePublicKey);
-     * console.log('Delegation set:', tx1);
+     * // Delegate to another address (costs 10 USDC)
+     * const delegateKey = new PublicKey('...');
+     * const txSig = await client.delegateTo(delegateKey);
+     * console.log('Delegation set, transaction:', txSig);
      * 
-     * // Clear delegation (free)
-     * const tx2 = await client.delegateTo();
-     * console.log('Delegation cleared:', tx2);
+     * // Clear delegation (no fee)
+     * await client.delegateTo(null);
      * ```
      */
-    async delegateTo(delegate?: PublicKey): Promise<string> {
+    async delegateTo(delegate: PublicKey | null): Promise<string> {
         const delegator = this.provider.wallet.publicKey;
+        
+        // Derive delegation PDA
         const [delegationPda] = PublicKey.findProgramAddressSync(
             [Buffer.from('delegation'), delegator.toBuffer()],
             this.program.programId
         );
 
-        const delegatorUsdcAccount = getAssociatedTokenAddressSync(
+        // Get associated token accounts
+        const delegatorUsdc = getAssociatedTokenAddressSync(
             this.usdcMint,
             delegator
         );
-
-        const serviceUsdcAccount = getAssociatedTokenAddressSync(
+        const serviceUsdc = getAssociatedTokenAddressSync(
             this.usdcMint,
             this.mailServicePda,
-            true
+            true // allowOwnerOffCurve
         );
 
-        return await ((this.program.methods as any) as any)
-            .delegateTo(delegate || null)
+        return await this.program.methods
+            .delegateTo(delegate)
             .accounts({
                 delegation: delegationPda,
                 mailService: this.mailServicePda,
-                delegator: delegator,
-                delegatorUsdcAccount,
-                serviceUsdcAccount,
+                delegator,
+                delegatorUsdcAccount: delegatorUsdc,
+                serviceUsdcAccount: serviceUsdc,
                 tokenProgram: TOKEN_PROGRAM_ID,
                 associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
                 systemProgram: SystemProgram.programId,
@@ -184,268 +189,203 @@ export class MailServiceClient {
     }
 
     /**
-     * @description Reject a delegation made to you by another address
-     * @notice Only the current delegate can reject a delegation made to them
-     * @param delegatorAddress Address of the user who delegated to you
-     * @returns Promise resolving to transaction signature
-     * @throws {Error} If no delegation exists or you're not the current delegate
+     * @description Reject a delegation that was made to your address
+     * @param delegatorAddress Public key of the account that delegated to you
+     * @returns Promise resolving to the transaction signature
+     * @throws {Error} If you're not the current delegate or no delegation exists
      * @example
      * ```typescript
-     * // If someone delegated to you and you want to reject it
-     * const tx = await client.rejectDelegation(delegatorPublicKey);
-     * console.log('Delegation rejected:', tx);
-     * 
-     * // The delegation will be cleared and the delegator will need to set a new one
+     * // Reject a delegation made to you
+     * const delegatorKey = new PublicKey('...');
+     * const txSig = await client.rejectDelegation(delegatorKey);
+     * console.log('Delegation rejected, transaction:', txSig);
      * ```
      */
     async rejectDelegation(delegatorAddress: PublicKey): Promise<string> {
+        const rejector = this.provider.wallet.publicKey;
+        
+        // Derive delegation PDA for the delegator
         const [delegationPda] = PublicKey.findProgramAddressSync(
             [Buffer.from('delegation'), delegatorAddress.toBuffer()],
             this.program.programId
         );
 
-        return await (this.program.methods as any)
+        return await this.program.methods
             .rejectDelegation()
             .accounts({
                 delegation: delegationPda,
                 delegator: delegatorAddress,
-                rejector: this.provider.wallet.publicKey,
-            })
-            .rpc();
-    }
-
-    /**
-     * @description Register a new domain or extend an existing domain registration
-     * @notice Costs 100 USDC for both new registration and extension (1 year each)
-     * @param domain The domain name to register (e.g., 'mydomain')
-     * @param isExtension true if extending existing registration, false for new registration
-     * @returns Promise resolving to transaction signature
-     * @throws {Error} If domain is empty, insufficient USDC balance, or transaction fails
-     * @example
-     * ```typescript
-     * // Register a new domain (costs 100 USDC)
-     * const tx1 = await client.registerDomain('mydomain.sol', false);
-     * console.log('Domain registered:', tx1);
-     * 
-     * // Extend existing domain (costs 100 USDC, adds 1 year)
-     * const tx2 = await client.registerDomain('mydomain.sol', true);
-     * console.log('Domain extended:', tx2);
-     * ```
-     */
-    async registerDomain(domain: string, isExtension: boolean = false): Promise<string> {
-        const registrant = this.provider.wallet.publicKey;
-        const registrantUsdcAccount = getAssociatedTokenAddressSync(
-            this.usdcMint,
-            registrant
-        );
-
-        const serviceUsdcAccount = getAssociatedTokenAddressSync(
-            this.usdcMint,
-            this.mailServicePda,
-            true
-        );
-
-        return await (this.program.methods as any)
-            .registerDomain(domain, isExtension)
-            .accounts({
-                mailService: this.mailServicePda,
-                registrant: registrant,
-                registrantUsdcAccount,
-                serviceUsdcAccount,
-                tokenProgram: TOKEN_PROGRAM_ID,
-            })
-            .rpc();
-    }
-
-    /**
-     * @description Update the domain registration fee (owner only)
-     * @notice Only the program owner can call this function
-     * @param newFee New registration fee in USDC (with 6 decimals)
-     * @returns Promise resolving to transaction signature
-     * @throws {Error} If caller is not owner or transaction fails
-     * @example
-     * ```typescript
-     * // Set registration fee to 150 USDC (150,000,000 with 6 decimals)
-     * const tx = await client.setRegistrationFee(150000000);
-     * console.log('Registration fee updated:', tx);
-     * ```
-     */
-    async setRegistrationFee(newFee: number): Promise<string> {
-        return await (this.program.methods as any)
-            .setRegistrationFee(new BN(newFee))
-            .accounts({
-                mailService: this.mailServicePda,
-                owner: this.provider.wallet.publicKey,
+                rejector,
             })
             .rpc();
     }
 
     /**
      * @description Update the delegation fee (owner only)
-     * @notice Only the program owner can call this function
-     * @param newFee New delegation fee in USDC (with 6 decimals)
-     * @returns Promise resolving to transaction signature
-     * @throws {Error} If caller is not owner or transaction fails
+     * @param newFeeUsdc New fee amount in USDC (will be converted to 6-decimal format)
+     * @returns Promise resolving to the transaction signature
+     * @throws {Error} If caller is not the owner or fee update fails
      * @example
      * ```typescript
-     * // Set delegation fee to 15 USDC (15,000,000 with 6 decimals)
-     * const tx = await client.setDelegationFee(15000000);
-     * console.log('Delegation fee updated:', tx);
+     * // Set delegation fee to 15 USDC
+     * await client.setDelegationFee(15);
      * ```
      */
-    async setDelegationFee(newFee: number): Promise<string> {
-        return await (this.program.methods as any)
-            .setDelegationFee(new BN(newFee))
+    async setDelegationFee(newFeeUsdc: number): Promise<string> {
+        const owner = this.provider.wallet.publicKey;
+        const newFeeAmount = new BN(newFeeUsdc * 1_000_000); // Convert to 6 decimals
+
+        return await this.program.methods
+            .setDelegationFee(newFeeAmount)
             .accounts({
                 mailService: this.mailServicePda,
-                owner: this.provider.wallet.publicKey,
+                owner,
             })
             .rpc();
     }
 
     /**
-     * @description Withdraw accumulated fees from the program (owner only)
-     * @notice Only the program owner can call this function
-     * @param amount Amount of USDC to withdraw (with 6 decimals)
-     * @returns Promise resolving to transaction signature
-     * @throws {Error} If caller is not owner, insufficient balance, or transaction fails
+     * @description Withdraw collected fees from the service to owner's account (owner only)
+     * @param amountUsdc Amount to withdraw in USDC
+     * @returns Promise resolving to the transaction signature
+     * @throws {Error} If caller is not the owner or insufficient balance
      * @example
      * ```typescript
-     * // Withdraw 50 USDC from accumulated fees
-     * const tx = await client.withdrawFees(50000000);
-     * console.log('Fees withdrawn:', tx);
+     * // Withdraw 50 USDC in fees
+     * await client.withdrawFees(50);
      * ```
      */
-    async withdrawFees(amount: number): Promise<string> {
+    async withdrawFees(amountUsdc: number): Promise<string> {
         const owner = this.provider.wallet.publicKey;
-        const serviceUsdcAccount = getAssociatedTokenAddressSync(
+        const amount = new BN(amountUsdc * 1_000_000); // Convert to 6 decimals
+
+        // Get associated token accounts
+        const serviceUsdc = getAssociatedTokenAddressSync(
             this.usdcMint,
             this.mailServicePda,
-            true
+            true // allowOwnerOffCurve
         );
-        const ownerUsdcAccount = getAssociatedTokenAddressSync(
+        const ownerUsdc = getAssociatedTokenAddressSync(
             this.usdcMint,
             owner
         );
 
-        return await (this.program.methods as any)
-            .withdrawFees(new BN(amount))
+        return await this.program.methods
+            .withdrawFees(amount)
             .accounts({
                 mailService: this.mailServicePda,
-                owner: owner,
-                serviceUsdcAccount,
-                ownerUsdcAccount,
+                owner,
+                serviceUsdcAccount: serviceUsdc,
+                ownerUsdcAccount: ownerUsdc,
                 tokenProgram: TOKEN_PROGRAM_ID,
             })
             .rpc();
     }
 
     /**
-     * @description Get the current delegation information for a given address
-     * @param delegator Address to check delegation for
+     * @description Get current delegation for a delegator address
+     * @param delegatorAddress Address to check delegation for
      * @returns Promise resolving to DelegationInfo or null if no delegation exists
      * @example
      * ```typescript
-     * const delegation = await client.getDelegation(userAddress);
-     * if (delegation && delegation.delegate) {
-     *     console.log(`${delegation.delegator} has delegated to:`, delegation.delegate.toString());
-     * } else {
-     *     console.log('No delegation set');
+     * // Check your own delegation
+     * const delegation = await client.getDelegation(wallet.publicKey);
+     * if (delegation) {
+     *   console.log('Delegated to:', delegation.delegate?.toString());
      * }
      * ```
      */
-    async getDelegation(delegator: PublicKey): Promise<DelegationInfo | null> {
+    async getDelegation(delegatorAddress: PublicKey): Promise<DelegationInfo | null> {
         try {
             const [delegationPda] = PublicKey.findProgramAddressSync(
-                [Buffer.from('delegation'), delegator.toBuffer()],
+                [Buffer.from('delegation'), delegatorAddress.toBuffer()],
                 this.program.programId
             );
 
-            const account = await (this.program.account as any).delegation.fetch(delegationPda);
+            const delegationAccount = await this.program.account.delegation.fetch(delegationPda);
+            
             return {
-                delegator: account.delegator,
-                delegate: account.delegate,
+                delegator: delegationAccount.delegator,
+                delegate: delegationAccount.delegate,
+                bump: delegationAccount.bump
             };
-        } catch {
+        } catch (error) {
+            // Account doesn't exist
             return null;
         }
     }
 
     /**
-     * @description Get current registration and delegation fees
-     * @returns Promise resolving to fee amounts in USDC (with 6 decimals)
+     * @description Get current program fees and configuration
+     * @returns Promise resolving to MailServiceFees object with current fee structure
      * @example
      * ```typescript
      * const fees = await client.getFees();
-     * console.log(`Registration: ${formatUSDC(fees.registrationFee)} USDC`);
-     * console.log(`Delegation: ${formatUSDC(fees.delegationFee)} USDC`);
+     * console.log('Delegation fee:', formatUSDC(fees.delegationFee), 'USDC');
      * ```
      */
     async getFees(): Promise<MailServiceFees> {
-        const account = await (this.program.account as any).mailServiceState.fetch(this.mailServicePda);
+        const serviceAccount = await this.program.account.mailServiceState.fetch(this.mailServicePda);
+        
         return {
-            registrationFee: account.registrationFee.toNumber(),
-            delegationFee: account.delegationFee.toNumber(),
+            delegationFee: serviceAccount.delegationFee.toNumber(),
+            owner: serviceAccount.owner
         };
     }
 
     /**
-     * @description Get current fees formatted as human-readable strings
-     * @returns Promise resolving to formatted fee strings
-     * @example
-     * ```typescript
-     * const formatted = await client.getFeesFormatted();
-     * console.log(`Domain registration: ${formatted.registrationFee}`);
-     * console.log(`Delegation setup: ${formatted.delegationFee}`);
-     * ```
+     * @description Get the program ID for this MailService instance
+     * @returns Public key of the program
      */
-    async getFeesFormatted(): Promise<{ registrationFee: string; delegationFee: string }> {
-        const fees = await this.getFees();
-        return {
-            registrationFee: formatUSDC(fees.registrationFee) + ' USDC',
-            delegationFee: formatUSDC(fees.delegationFee) + ' USDC',
-        };
+    getProgramId(): PublicKey {
+        return this.program.programId;
     }
 
     /**
-     * @description Get the Program Derived Address (PDA) of the MailService account
-     * @returns The deterministically derived address of the MailService program account
-     * @example
-     * ```typescript
-     * const serviceAddress = client.getServiceAddress();
-     * console.log('MailService PDA:', serviceAddress.toString());
-     * 
-     * // This address stores the program state and USDC balance
-     * const usdcAccount = getAssociatedTokenAddressSync(usdcMint, serviceAddress, true);
-     * ```
+     * @description Get the PDA address for the main MailService state
+     * @returns Public key of the MailService PDA
      */
     getServiceAddress(): PublicKey {
         return this.mailServicePda;
     }
 
     /**
-     * @description Get the USDC token mint address used by this client
-     * @returns The USDC mint public key
-     * @example
-     * ```typescript
-     * const usdcMint = client.getUsdcMint();
-     * console.log('USDC Mint:', usdcMint.toString());
-     * ```
+     * @description Get the USDC mint address being used by this service
+     * @returns Public key of the USDC token mint
      */
-    getUsdcMint(): PublicKey {
+    getUSDCMint(): PublicKey {
         return this.usdcMint;
     }
 
     /**
-     * @description Get the MailService program ID
-     * @returns The MailService program's public key
-     * @example
-     * ```typescript
-     * const programId = client.getProgramId();
-     * console.log('MailService Program ID:', programId.toString());
-     * ```
+     * @description Create a delegation PDA for a given delegator
+     * @param delegatorAddress Address of the delegator
+     * @returns Tuple of [PDA PublicKey, bump seed]
      */
-    getProgramId(): PublicKey {
-        return this.program.programId;
+    getDelegationPDA(delegatorAddress: PublicKey): [PublicKey, number] {
+        return PublicKey.findProgramAddressSync(
+            [Buffer.from('delegation'), delegatorAddress.toBuffer()],
+            this.program.programId
+        );
+    }
+
+    /**
+     * @description Get service token account balance in USDC
+     * @returns Promise resolving to the balance in USDC (human readable)
+     */
+    async getServiceBalance(): Promise<number> {
+        const serviceUsdc = getAssociatedTokenAddressSync(
+            this.usdcMint,
+            this.mailServicePda,
+            true // allowOwnerOffCurve
+        );
+
+        try {
+            const balance = await this.provider.connection.getTokenAccountBalance(serviceUsdc);
+            return parseFloat(balance.value.uiAmount?.toString() || '0');
+        } catch (error) {
+            // Account doesn't exist
+            return 0;
+        }
     }
 }

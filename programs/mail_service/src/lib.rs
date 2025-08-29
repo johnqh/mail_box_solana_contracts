@@ -4,7 +4,6 @@ use anchor_spl::associated_token::AssociatedToken;
 
 declare_id!("8EKjCLZjz6LKRxZcQ6LwwF5V8P3TCEgM2CdQg4pZxXHE");
 
-const REGISTRATION_FEE: u64 = 100_000_000; // 100 USDC (6 decimals)
 const DELEGATION_FEE: u64 = 10_000_000;    // 10 USDC (6 decimals)
 
 #[program]
@@ -15,7 +14,6 @@ pub mod mail_service {
         let service = &mut ctx.accounts.mail_service;
         service.owner = ctx.accounts.owner.key();
         service.usdc_mint = usdc_mint;
-        service.registration_fee = REGISTRATION_FEE;
         service.delegation_fee = DELEGATION_FEE;
         service.bump = ctx.bumps.mail_service;
         Ok(())
@@ -71,56 +69,6 @@ pub mod mail_service {
         emit!(DelegationSet {
             delegator,
             delegate: None,
-        });
-
-        Ok(())
-    }
-
-    pub fn register_domain(
-        ctx: Context<RegisterDomain>, 
-        domain: String, 
-        is_extension: bool
-    ) -> Result<()> {
-        require!(!domain.is_empty(), MailServiceError::EmptyDomain);
-
-        // Transfer registration fee from registrant to service
-        let transfer_ctx = CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.registrant_usdc_account.to_account_info(),
-                to: ctx.accounts.service_usdc_account.to_account_info(),
-                authority: ctx.accounts.registrant.to_account_info(),
-            },
-        );
-        token::transfer(transfer_ctx, ctx.accounts.mail_service.registration_fee)?;
-
-        let expiration = Clock::get()?.unix_timestamp + (365 * 24 * 60 * 60); // 1 year
-
-        if is_extension {
-            emit!(DomainExtended {
-                domain: domain.clone(),
-                registrar: ctx.accounts.registrant.key(),
-                expiration,
-            });
-        } else {
-            emit!(DomainRegistered {
-                domain: domain.clone(),
-                registrar: ctx.accounts.registrant.key(),
-                expiration,
-            });
-        }
-
-        Ok(())
-    }
-
-    pub fn set_registration_fee(ctx: Context<SetFee>, new_fee: u64) -> Result<()> {
-        let service = &mut ctx.accounts.mail_service;
-        let old_fee = service.registration_fee;
-        service.registration_fee = new_fee;
-
-        emit!(RegistrationFeeUpdated {
-            old_fee,
-            new_fee,
         });
 
         Ok(())
@@ -229,31 +177,6 @@ pub struct RejectDelegation<'info> {
 }
 
 #[derive(Accounts)]
-pub struct RegisterDomain<'info> {
-    #[account(seeds = [b"mail_service"], bump = mail_service.bump)]
-    pub mail_service: Account<'info, MailServiceState>,
-    
-    #[account(mut)]
-    pub registrant: Signer<'info>,
-    
-    #[account(
-        mut,
-        associated_token::mint = mail_service.usdc_mint,
-        associated_token::authority = registrant
-    )]
-    pub registrant_usdc_account: Account<'info, TokenAccount>,
-    
-    #[account(
-        mut,
-        associated_token::mint = mail_service.usdc_mint,
-        associated_token::authority = mail_service
-    )]
-    pub service_usdc_account: Account<'info, TokenAccount>,
-    
-    pub token_program: Program<'info, Token>,
-}
-
-#[derive(Accounts)]
 pub struct SetFee<'info> {
     #[account(
         mut,
@@ -300,7 +223,6 @@ pub struct WithdrawFees<'info> {
 pub struct MailServiceState {
     pub owner: Pubkey,
     pub usdc_mint: Pubkey,
-    pub registration_fee: u64,
     pub delegation_fee: u64,
     pub bump: u8,
 }
@@ -320,26 +242,6 @@ pub struct DelegationSet {
 }
 
 #[event]
-pub struct DomainRegistered {
-    pub domain: String,
-    pub registrar: Pubkey,
-    pub expiration: i64,
-}
-
-#[event]
-pub struct DomainExtended {
-    pub domain: String,
-    pub registrar: Pubkey,
-    pub expiration: i64,
-}
-
-#[event]
-pub struct RegistrationFeeUpdated {
-    pub old_fee: u64,
-    pub new_fee: u64,
-}
-
-#[event]
 pub struct DelegationFeeUpdated {
     pub old_fee: u64,
     pub new_fee: u64,
@@ -347,8 +249,6 @@ pub struct DelegationFeeUpdated {
 
 #[error_code]
 pub enum MailServiceError {
-    #[msg("Empty domain name not allowed")]
-    EmptyDomain,
     #[msg("Only the owner can perform this action")]
     OnlyOwner,
     #[msg("No delegation to reject")]

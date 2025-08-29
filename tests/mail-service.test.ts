@@ -24,7 +24,6 @@ describe('MailService', () => {
     let user2: Keypair;
     let client: MailServiceClient;
     
-    const REGISTRATION_FEE = 100_000_000; // 100 USDC
     const DELEGATION_FEE = 10_000_000;    // 10 USDC
 
     before(async () => {
@@ -48,280 +47,240 @@ describe('MailService', () => {
         );
 
         // Create client and initialize
-        const wallet = new anchor.Wallet(owner);
+        const ownerWallet = { 
+            publicKey: owner.publicKey,
+            signTransaction: async () => { throw new Error('Not implemented'); },
+            signAllTransactions: async () => { throw new Error('Not implemented'); }
+        };
+        
         client = await MailServiceClient.initialize(
             provider.connection,
-            wallet,
+            ownerWallet as any,
             program.programId,
-            usdcMint,
-            owner.publicKey
+            usdcMint
         );
 
-        // Create token accounts and mint tokens
-        await setupTokenAccounts();
-    });
+        // Create and fund token accounts
+        await createAssociatedTokenAccount(
+            provider.connection,
+            owner,
+            usdcMint,
+            user1.publicKey
+        );
+        
+        await createAssociatedTokenAccount(
+            provider.connection,
+            owner,
+            usdcMint,
+            user2.publicKey
+        );
 
-    async function setupTokenAccounts() {
-        // Create and fund user token accounts
+        await createAssociatedTokenAccount(
+            provider.connection,
+            owner,
+            usdcMint,
+            client.getServiceAddress(),
+            true
+        );
+
+        // Mint USDC to test users
         const user1TokenAccount = await createAssociatedTokenAccount(
             provider.connection,
-            user1,
+            owner,
             usdcMint,
             user1.publicKey
         );
 
         const user2TokenAccount = await createAssociatedTokenAccount(
             provider.connection,
-            user2,
+            owner,
             usdcMint,
             user2.publicKey
         );
 
-        // Mint tokens to users
         await mintTo(
             provider.connection,
-            (provider.wallet as any).payer || provider.wallet,
+            owner,
             usdcMint,
             user1TokenAccount,
-            (provider.wallet as any).payer || provider.wallet,
-            1000 * 1_000_000 // 1000 USDC
+            provider.wallet.publicKey,
+            1000_000_000 // 1000 USDC
         );
 
         await mintTo(
             provider.connection,
-            (provider.wallet as any).payer || provider.wallet,
+            owner,
             usdcMint,
             user2TokenAccount,
-            (provider.wallet as any).payer || provider.wallet,
-            1000 * 1_000_000 // 1000 USDC
+            provider.wallet.publicKey,
+            1000_000_000 // 1000 USDC
         );
-    }
+    });
+
+    describe('Initialization', () => {
+        it('Should initialize the service correctly', async () => {
+            const fees = await client.getFees();
+            expect(fees.delegationFee).to.equal(DELEGATION_FEE);
+            expect(fees.owner.toString()).to.equal(owner.publicKey.toString());
+        });
+    });
 
     describe('Delegation', () => {
-        it('Should delegate to another address', async () => {
+        it('Should allow delegation to another address', async () => {
+            const user1Wallet = { 
+                publicKey: user1.publicKey,
+                signTransaction: async () => { throw new Error('Not implemented'); },
+                signAllTransactions: async () => { throw new Error('Not implemented'); }
+            };
+            
             const userClient = new MailServiceClient(
                 provider.connection,
-                new anchor.Wallet(user1),
+                user1Wallet as any,
                 program.programId,
                 usdcMint
             );
 
             const txSig = await userClient.delegateTo(user2.publicKey);
-            console.log('Delegation transaction:', txSig);
+            expect(txSig).to.be.a('string');
 
-            const delegation = await userClient.getDelegation(user1.publicKey);
-            expect(delegation).to.not.be.null;
-            expect(delegation!.delegate!.toString()).to.equal(user2.publicKey.toString());
+            // Check delegation was set
+            const delegation = await client.getDelegation(user1.publicKey);
+            expect(delegation?.delegate?.toString()).to.equal(user2.publicKey.toString());
         });
 
-        it('Should reject delegation', async () => {
+        it('Should clear delegation when setting to null', async () => {
+            const user1Wallet = { 
+                publicKey: user1.publicKey,
+                signTransaction: async () => { throw new Error('Not implemented'); },
+                signAllTransactions: async () => { throw new Error('Not implemented'); }
+            };
+            
+            const userClient = new MailServiceClient(
+                provider.connection,
+                user1Wallet as any,
+                program.programId,
+                usdcMint
+            );
+
+            await userClient.delegateTo(null);
+
+            // Check delegation was cleared
+            const delegation = await client.getDelegation(user1.publicKey);
+            expect(delegation?.delegate).to.be.null;
+        });
+
+        it('Should allow delegate to reject delegation', async () => {
+            const user1Wallet = { 
+                publicKey: user1.publicKey,
+                signTransaction: async () => { throw new Error('Not implemented'); },
+                signAllTransactions: async () => { throw new Error('Not implemented'); }
+            };
+            
+            const user2Wallet = { 
+                publicKey: user2.publicKey,
+                signTransaction: async () => { throw new Error('Not implemented'); },
+                signAllTransactions: async () => { throw new Error('Not implemented'); }
+            };
+            
+            const user1Client = new MailServiceClient(
+                provider.connection,
+                user1Wallet as any,
+                program.programId,
+                usdcMint
+            );
+
             const user2Client = new MailServiceClient(
                 provider.connection,
-                new anchor.Wallet(user2),
+                user2Wallet as any,
                 program.programId,
                 usdcMint
             );
 
-            const txSig = await user2Client.rejectDelegation(user1.publicKey);
-            console.log('Rejection transaction:', txSig);
+            // Set delegation
+            await user1Client.delegateTo(user2.publicKey);
 
-            const delegation = await user2Client.getDelegation(user1.publicKey);
-            expect(delegation!.delegate).to.be.null;
-        });
+            // Reject delegation as user2
+            await user2Client.rejectDelegation(user1.publicKey);
 
-        it('Should clear delegation', async () => {
-            const userClient = new MailServiceClient(
-                provider.connection,
-                new anchor.Wallet(user1),
-                program.programId,
-                usdcMint
-            );
-
-            // Set delegation again
-            await userClient.delegateTo(user2.publicKey);
-            
-            // Clear delegation
-            const txSig = await userClient.delegateTo();
-            console.log('Clear delegation transaction:', txSig);
-
-            const delegation = await userClient.getDelegation(user1.publicKey);
-            expect(delegation!.delegate).to.be.null;
-        });
-    });
-
-    describe('Domain Registration', () => {
-        it('Should register a domain', async () => {
-            const userClient = new MailServiceClient(
-                provider.connection,
-                new anchor.Wallet(user1),
-                program.programId,
-                usdcMint
-            );
-
-            const txSig = await userClient.registerDomain('example.mailbox', false);
-            console.log('Domain registration transaction:', txSig);
-            
-            // Check that fee was charged (we can't easily verify the exact amount without additional setup)
-        });
-
-        it('Should extend a domain registration', async () => {
-            const userClient = new MailServiceClient(
-                provider.connection,
-                new anchor.Wallet(user1),
-                program.programId,
-                usdcMint
-            );
-
-            const txSig = await userClient.registerDomain('example.mailbox', true);
-            console.log('Domain extension transaction:', txSig);
+            // Check delegation was cleared
+            const delegation = await client.getDelegation(user1.publicKey);
+            expect(delegation?.delegate).to.be.null;
         });
     });
 
     describe('Fee Management', () => {
-        it('Should get current fees', async () => {
-            const fees = await client.getFees();
-            expect(fees.registrationFee).to.equal(REGISTRATION_FEE);
-            expect(fees.delegationFee).to.equal(DELEGATION_FEE);
-        });
-
-        it('Should update registration fee (owner only)', async () => {
-            const newFee = 150_000_000; // 150 USDC
-            const txSig = await client.setRegistrationFee(newFee);
-            console.log('Fee update transaction:', txSig);
+        it('Should allow owner to update delegation fee', async () => {
+            const newFee = 15; // 15 USDC
+            await client.setDelegationFee(newFee);
 
             const fees = await client.getFees();
-            expect(fees.registrationFee).to.equal(newFee);
+            expect(fees.delegationFee).to.equal(newFee * 1_000_000);
         });
 
-        it('Should update delegation fee (owner only)', async () => {
-            const newFee = 15_000_000; // 15 USDC
-            const txSig = await client.setDelegationFee(newFee);
-            console.log('Fee update transaction:', txSig);
-
-            const fees = await client.getFees();
-            expect(fees.delegationFee).to.equal(newFee);
-        });
-
-        it('Should get formatted fees', async () => {
-            const fees = await client.getFeesFormatted();
-            expect(fees.registrationFee).to.include('USDC');
-            expect(fees.delegationFee).to.include('USDC');
-        });
-
-        it('Should fail to set fees as non-owner', async () => {
-            const userClient = new MailServiceClient(
+        it('Should allow owner to withdraw fees', async () => {
+            const ownerTokenAccount = await createAssociatedTokenAccount(
                 provider.connection,
-                new anchor.Wallet(user1),
-                program.programId,
-                usdcMint
+                owner,
+                usdcMint,
+                owner.publicKey
             );
 
-            try {
-                await userClient.setRegistrationFee(200_000_000);
-                expect.fail('Should have failed');
-            } catch (error: any) {
-                expect(error.message).to.include('OnlyOwner');
-            }
-        });
-
-        it('Should withdraw fees', async () => {
-            const withdrawAmount = 50_000_000; // 50 USDC
-            const txSig = await client.withdrawFees(withdrawAmount);
-            console.log('Withdraw fees transaction:', txSig);
-        });
-    });
-
-    describe('Error Handling', () => {
-        it('Should fail to register empty domain', async () => {
-            const userClient = new MailServiceClient(
-                provider.connection,
-                new anchor.Wallet(user1),
-                program.programId,
-                usdcMint
-            );
-
-            try {
-                await userClient.registerDomain('', false);
-                expect.fail('Should have failed');
-            } catch (error: any) {
-                expect(error.message).to.include('EmptyDomain');
-            }
-        });
-
-        it('Should fail to reject non-existent delegation', async () => {
-            const user2Client = new MailServiceClient(
-                provider.connection,
-                new anchor.Wallet(user2),
-                program.programId,
-                usdcMint
-            );
-
-            try {
-                // Try to reject delegation that doesn't exist or isn't targeted to user2
-                await user2Client.rejectDelegation(Keypair.generate().publicKey);
-                expect.fail('Should have failed');
-            } catch (error: any) {
-                // Should fail due to account not found or wrong delegate
-                expect(error.message).to.be.ok;
-            }
-        });
-    });
-
-    describe('Integration Tests', () => {
-        it('Should handle full delegation workflow', async () => {
-            const userClient = new MailServiceClient(
-                provider.connection,
-                new anchor.Wallet(user1),
-                program.programId,
-                usdcMint
-            );
-
-            const user2Client = new MailServiceClient(
-                provider.connection,
-                new anchor.Wallet(user2),
-                program.programId,
-                usdcMint
-            );
-
-            // 1. Set delegation
-            await userClient.delegateTo(user2.publicKey);
-            let delegation = await userClient.getDelegation(user1.publicKey);
-            expect(delegation!.delegate!.toString()).to.equal(user2.publicKey.toString());
-
-            // 2. Reject delegation
-            await user2Client.rejectDelegation(user1.publicKey);
-            delegation = await userClient.getDelegation(user1.publicKey);
-            expect(delegation!.delegate).to.be.null;
-        });
-
-        it('Should handle multiple domain registrations', async () => {
-            const userClient = new MailServiceClient(
-                provider.connection,
-                new anchor.Wallet(user1),
-                program.programId,
-                usdcMint
-            );
-
-            const domains = ['test1.mailbox', 'test2.mailbox', 'test3.mailbox'];
+            const balanceBefore = await getAccount(provider.connection, ownerTokenAccount);
             
-            for (const domain of domains) {
-                const txSig = await userClient.registerDomain(domain, false);
-                console.log(`Registered ${domain}:`, txSig);
+            await client.withdrawFees(5); // Withdraw 5 USDC
+
+            const balanceAfter = await getAccount(provider.connection, ownerTokenAccount);
+            expect(Number(balanceAfter.amount) - Number(balanceBefore.amount)).to.equal(5_000_000);
+        });
+    });
+
+    describe('Validation', () => {
+        it('Should fail delegation rejection by non-delegate', async () => {
+            const user1Wallet = { 
+                publicKey: user1.publicKey,
+                signTransaction: async () => { throw new Error('Not implemented'); },
+                signAllTransactions: async () => { throw new Error('Not implemented'); }
+            };
+            
+            const userClient = new MailServiceClient(
+                provider.connection,
+                user1Wallet as any,
+                program.programId,
+                usdcMint
+            );
+
+            // Set delegation
+            await userClient.delegateTo(user2.publicKey);
+
+            // Try to reject as user1 (should fail)
+            try {
+                await userClient.rejectDelegation(user1.publicKey);
+                expect.fail('Should have thrown an error');
+            } catch (error) {
+                expect(error.message).to.include('No delegation to reject');
             }
         });
 
-        it('Should verify program address derivation', () => {
-            const expectedAddress = client.getServiceAddress();
-            const [derivedAddress] = PublicKey.findProgramAddressSync(
-                [Buffer.from('mail_service')],
-                program.programId
+        it('Should fail fee operations by non-owner', async () => {
+            const user1Wallet = { 
+                publicKey: user1.publicKey,
+                signTransaction: async () => { throw new Error('Not implemented'); },
+                signAllTransactions: async () => { throw new Error('Not implemented'); }
+            };
+            
+            const userClient = new MailServiceClient(
+                provider.connection,
+                user1Wallet as any,
+                program.programId,
+                usdcMint
             );
-            expect(expectedAddress.toString()).to.equal(derivedAddress.toString());
-        });
 
-        it('Should verify USDC mint and program ID getters', () => {
-            expect(client.getUsdcMint().toString()).to.equal(usdcMint.toString());
-            expect(client.getProgramId().toString()).to.equal(program.programId.toString());
+            try {
+                await userClient.setDelegationFee(20);
+                expect.fail('Should have thrown an error');
+            } catch (error) {
+                expect(error.message).to.include('Only the owner can perform this action');
+            }
         });
     });
 });

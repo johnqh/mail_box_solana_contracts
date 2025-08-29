@@ -1,38 +1,23 @@
 module.exports = {
-  parser: '@typescript-eslint/parser',
+  parser: "@typescript-eslint/parser",
+  plugins: ["@typescript-eslint"],
+  extends: [
+    "eslint:recommended",
+    "@typescript-eslint/recommended",
+  ],
   parserOptions: {
     ecmaVersion: 2020,
-    sourceType: 'module',
-    project: './tsconfig.json',
-  },
-  extends: [
-    'eslint:recommended',
-    '@typescript-eslint/recommended',
-  ],
-  plugins: ['@typescript-eslint'],
-  env: {
-    node: true,
-    es2020: true,
-    mocha: true,
+    sourceType: "module",
   },
   rules: {
-    // Disable strict typing rules for test files
-    '@typescript-eslint/no-explicit-any': 'off',
-    '@typescript-eslint/no-unused-vars': ['warn', { 'argsIgnorePattern': '^_' }],
-    '@typescript-eslint/no-non-null-assertion': 'off',
-    '@typescript-eslint/ban-ts-comment': 'off',
-    // Allow console in test files
-    'no-console': ['error', { allow: ['warn', 'error', 'log'] }],
+    "@typescript-eslint/no-unused-vars": "warn",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "no-console": "warn",
   },
-  overrides: [
-    {
-      files: ['tests/**/*', '**/*.test.ts', '**/*.spec.ts'],
-      rules: {
-        '@typescript-eslint/no-explicit-any': 'off',
-        '@typescript-eslint/no-unused-expressions': 'off',
-        '@typescript-eslint/no-non-null-assertion': 'off',
-        'no-unused-expressions': 'off',
-      },
-    },
+  ignorePatterns: [
+    "target/",
+    "node_modules/",
+    "dist/",
+    "*.js",
   ],
 };
