@@ -39,7 +39,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use anchor_spl::associated_token::AssociatedToken;
 
-/// Program ID for the Mailer program
+// Program ID for the Mailer program
 declare_id!("9FLkBDGpZBcR8LMsQ7MwwV6X9P4TDFgN3DeRh5qYyHJF");
 
 /// Base sending fee in USDC (with 6 decimals): 0.1 USDC
@@ -86,7 +86,7 @@ pub mod mailer {
         mailer.usdc_mint = usdc_mint;
         mailer.send_fee = SEND_FEE;
         mailer.owner_claimable = 0;
-        mailer.bump = ctx.bumps.mailer;
+        mailer.bump = *ctx.bumps.get("mailer").unwrap();
         Ok(())
     }
 
