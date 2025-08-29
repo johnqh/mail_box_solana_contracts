@@ -16,7 +16,5 @@ cpi = ["no-entrypoint"]
 default = []
 
 [dependencies]
-anchor-lang.workspace = true
+anchor-lang = { workspace = true, features = ["init-if-needed"] }
 anchor-spl.workspace = true
-spl-token.workspace = true
-spl-associated-token-account.workspace = true

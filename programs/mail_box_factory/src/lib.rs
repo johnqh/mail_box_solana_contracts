@@ -104,7 +104,7 @@ pub mod mail_box_factory {
             usdc_mint,
             mailer_program: ctx.accounts.mailer_program.key(),
             mail_service_program: ctx.accounts.mail_service_program.key(),
-            coordinator: ctx.accounts.coordinator.key(),
+            coordinator: ctx.accounts.owner.key(),
         });
 
         Ok(())
@@ -176,6 +176,7 @@ pub struct RegisterDeployment<'info> {
     )]
     pub factory: Account<'info, FactoryState>,
     
+    #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -194,11 +195,11 @@ pub struct BatchInitialize<'info> {
     #[account(
         seeds = [b"factory"],
         bump = factory.bump,
-        has_one = coordinator @ FactoryError::OnlyOwner
+        has_one = owner @ FactoryError::OnlyOwner
     )]
     pub factory: Account<'info, FactoryState>,
     
-    pub coordinator: Signer<'info>,
+    pub owner: Signer<'info>,
     
     /// CHECK: This is the mailer program to initialize
     pub mailer_program: UncheckedAccount<'info>,

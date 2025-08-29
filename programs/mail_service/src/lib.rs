@@ -89,7 +89,8 @@ pub mod mail_service {
 
     pub fn withdraw_fees(ctx: Context<WithdrawFees>, amount: u64) -> Result<()> {
         // Transfer USDC from service to owner
-        let seeds = &[b"mail_service", &[ctx.accounts.mail_service.bump]];
+        let bump = ctx.accounts.mail_service.bump;
+        let seeds = &[b"mail_service".as_ref(), &[bump]];
         let signer_seeds = &[&seeds[..]];
         
         let transfer_ctx = CpiContext::new_with_signer(

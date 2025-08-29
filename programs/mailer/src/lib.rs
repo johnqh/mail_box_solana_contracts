@@ -135,14 +135,15 @@ pub mod mailer {
                 authority: ctx.accounts.sender.to_account_info(),
             },
         );
-        token::transfer(transfer_ctx, ctx.accounts.mailer.send_fee)?;
+        let send_fee = ctx.accounts.mailer.send_fee;
+        token::transfer(transfer_ctx, send_fee)?;
 
         // Record shares for revenue sharing
         record_shares(
             &mut ctx.accounts.recipient_claim,
             &mut ctx.accounts.mailer,
             sender,
-            ctx.accounts.mailer.send_fee,
+            send_fee,
         )?;
 
         emit!(MailSent {
@@ -192,14 +193,15 @@ pub mod mailer {
                 authority: ctx.accounts.sender.to_account_info(),
             },
         );
-        token::transfer(transfer_ctx, ctx.accounts.mailer.send_fee)?;
+        let send_fee = ctx.accounts.mailer.send_fee;
+        token::transfer(transfer_ctx, send_fee)?;
 
         // Record shares for revenue sharing
         record_shares(
             &mut ctx.accounts.recipient_claim,
             &mut ctx.accounts.mailer,
             sender,
-            ctx.accounts.mailer.send_fee,
+            send_fee,
         )?;
 
         emit!(PreparedMailSent {
@@ -334,7 +336,8 @@ pub mod mailer {
         claim.timestamp = 0;
 
         // Transfer USDC from mailer to recipient
-        let seeds = &[b"mailer", &[ctx.accounts.mailer.bump]];
+        let bump = ctx.accounts.mailer.bump;
+        let seeds = &[b"mailer".as_ref(), &[bump]];
         let signer_seeds = &[&seeds[..]];
         
         let transfer_ctx = CpiContext::new_with_signer(
@@ -365,7 +368,8 @@ pub mod mailer {
         mailer.owner_claimable = 0;
 
         // Transfer USDC from mailer to owner
-        let seeds = &[b"mailer", &[mailer.bump]];
+        let bump = mailer.bump;
+        let seeds = &[b"mailer".as_ref(), &[bump]];
         let signer_seeds = &[&seeds[..]];
         
         let transfer_ctx = CpiContext::new_with_signer(
@@ -385,8 +389,8 @@ pub mod mailer {
     }
 
     pub fn claim_expired_shares(ctx: Context<ClaimExpiredShares>) -> Result<()> {
-        let claim = &mut ctx.accounts.recipient_claim;
         let recipient_key = ctx.accounts.recipient_claim.recipient;
+        let claim = &mut ctx.accounts.recipient_claim;
         
         require!(claim.amount > 0, MailerError::NoClaimableAmount);
         
