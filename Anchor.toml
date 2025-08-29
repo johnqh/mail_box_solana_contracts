@@ -5,17 +5,17 @@ skip-lint = false
 [programs.localnet]
 mail_service = "8EKjCLZjz6LKRxZcQ6LwwF5V8P3TCEgM2CdQg4pZxXHE"
 mailer = "9FLkBDGpZBcR8LMsQ7MwwV6X9P4TDFgN3DeRh5qYyHJF"
-mail_box_factory = "FactoryABC123def456GHI789jkl012MNO345pqr678STU"
+mail_box_factory = "7KxLzPMHGHLYqHYkX8YYtNjSGRD9mT4rE5hQ6pZvGbPz"
 
 [programs.devnet]
 mail_service = "8EKjCLZjz6LKRxZcQ6LwwF5V8P3TCEgM2CdQg4pZxXHE"
 mailer = "9FLkBDGpZBcR8LMsQ7MwwV6X9P4TDFgN3DeRh5qYyHJF"
-mail_box_factory = "FactoryABC123def456GHI789jkl012MNO345pqr678STU"
+mail_box_factory = "7KxLzPMHGHLYqHYkX8YYtNjSGRD9mT4rE5hQ6pZvGbPz"
 
 [programs.mainnet]
 mail_service = "8EKjCLZjz6LKRxZcQ6LwwF5V8P3TCEgM2CdQg4pZxXHE"
 mailer = "9FLkBDGpZBcR8LMsQ7MwwV6X9P4TDFgN3DeRh5qYyHJF"
-mail_box_factory = "FactoryABC123def456GHI789jkl012MNO345pqr678STU"
+mail_box_factory = "7KxLzPMHGHLYqHYkX8YYtNjSGRD9mT4rE5hQ6pZvGbPz"
 
 [registry]
 url = "https://api.apr.dev"

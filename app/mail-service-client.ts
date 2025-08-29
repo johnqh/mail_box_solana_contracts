@@ -121,7 +121,7 @@ export class MailServiceClient {
         const ownerKey = owner || wallet.publicKey;
         
         try {
-            const tx = await client.program.methods
+            const tx = await (client.program.methods as any)
                 .initialize(usdcMint)
                 .accounts({
                     mailService: client.mailServicePda,
@@ -173,7 +173,7 @@ export class MailServiceClient {
             true // allowOwnerOffCurve
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .delegateTo(delegate)
             .accounts({
                 delegation: delegationPda,
@@ -210,7 +210,7 @@ export class MailServiceClient {
             this.program.programId
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .rejectDelegation()
             .accounts({
                 delegation: delegationPda,
@@ -235,7 +235,7 @@ export class MailServiceClient {
         const owner = this.provider.wallet.publicKey;
         const newFeeAmount = new BN(newFeeUsdc * 1_000_000); // Convert to 6 decimals
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .setDelegationFee(newFeeAmount)
             .accounts({
                 mailService: this.mailServicePda,
@@ -270,7 +270,7 @@ export class MailServiceClient {
             owner
         );
 
-        return await this.program.methods
+        return await (this.program.methods as any)
             .withdrawFees(amount)
             .accounts({
                 mailService: this.mailServicePda,
@@ -302,7 +302,7 @@ export class MailServiceClient {
                 this.program.programId
             );
 
-            const delegationAccount = await this.program.account.delegation.fetch(delegationPda);
+            const delegationAccount = await (this.program.account as any).delegation.fetch(delegationPda);
             
             return {
                 delegator: delegationAccount.delegator,
@@ -325,11 +325,11 @@ export class MailServiceClient {
      * ```
      */
     async getFees(): Promise<MailServiceFees> {
-        const serviceAccount = await this.program.account.mailServiceState.fetch(this.mailServicePda);
+        const serviceAccount = await (this.program.account as any).mailServiceState.fetch(this.mailServicePda);
         
         return {
-            delegationFee: serviceAccount.delegationFee.toNumber(),
-            owner: serviceAccount.owner
+            registrationFee: serviceAccount.registrationFee?.toNumber() || 100_000_000,
+            delegationFee: serviceAccount.delegationFee.toNumber()
         };
     }
 

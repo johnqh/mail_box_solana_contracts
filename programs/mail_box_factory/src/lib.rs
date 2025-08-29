@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("FactoryABC123def456GHI789jkl012MNO345pqr678STU");
+declare_id!("7KxLzPMHGHLYqHYkX8YYtNjSGRD9mT4rE5hQ6pZvGbPz");
 
 #[program]
 pub mod mail_box_factory {

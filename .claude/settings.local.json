@@ -16,7 +16,12 @@
       "Bash(git add:*)",
       "WebSearch",
       "Bash(npm install:*)",
-      "Bash(solana:*)"
+      "Bash(solana:*)",
+      "Bash(cargo install:*)",
+      "Bash(avm install:*)",
+      "Bash(avm use:*)",
+      "Bash(anchor clean:*)",
+      "Bash(npm run lint)"
     ],
     "deny": [],
     "ask": []

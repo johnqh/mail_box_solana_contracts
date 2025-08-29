@@ -9,7 +9,7 @@ export interface ClaimableInfo {
 export interface DelegationInfo {
     delegator: PublicKey;
     delegate: PublicKey | null;
-    bump: number;
+    bump?: number;
 }
 
 export interface DeploymentConfig {
@@ -21,8 +21,8 @@ export interface DeploymentConfig {
 }
 
 export interface MailServiceFees {
+    registrationFee: number;
     delegationFee: number;
-    owner: PublicKey;
 }
 
 export interface MailerFees {

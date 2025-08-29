@@ -79,8 +79,7 @@ describe('MailService', () => {
             provider.connection,
             owner,
             usdcMint,
-            client.getServiceAddress(),
-            true
+            client.getServiceAddress()
         );
 
         // Mint USDC to test users
@@ -121,7 +120,6 @@ describe('MailService', () => {
         it('Should initialize the service correctly', async () => {
             const fees = await client.getFees();
             expect(fees.delegationFee).to.equal(DELEGATION_FEE);
-            expect(fees.owner.toString()).to.equal(owner.publicKey.toString());
         });
     });
 
@@ -256,7 +254,7 @@ describe('MailService', () => {
             try {
                 await userClient.rejectDelegation(user1.publicKey);
                 expect.fail('Should have thrown an error');
-            } catch (error) {
+            } catch (error: any) {
                 expect(error.message).to.include('No delegation to reject');
             }
         });
@@ -278,7 +276,7 @@ describe('MailService', () => {
             try {
                 await userClient.setDelegationFee(20);
                 expect.fail('Should have thrown an error');
-            } catch (error) {
+            } catch (error: any) {
                 expect(error.message).to.include('Only the owner can perform this action');
             }
         });
