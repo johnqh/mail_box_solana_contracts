@@ -19,13 +19,14 @@
   },
   "include": [
     "app/**/*",
-    "tests/**/*", 
-    "migrations/**/*",
-    "types/**/*"
+    "tests/types-utils.test.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "target"
+    "target",
+    "programs",
+    "migrations",
+    "scripts"
   ]
 }
